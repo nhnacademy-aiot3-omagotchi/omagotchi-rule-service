@@ -1,6 +1,7 @@
 package site.omagotchi.ruleservice.global.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -56,10 +57,12 @@ public class GlobalExceptionHandler {
             String message,
             HttpServletRequest request
     ) {
+        HttpStatus status = ErrorHttpStatusMapper.map(errorCode.type());
+
         return ResponseEntity
-                .status(errorCode.status())
+                .status(status)
                 .body(new ApiErrorResponse(
-                        errorCode.status().value(),
+                        status.value(),
                         errorCode.code(),
                         message,
                         request.getRequestURI()
