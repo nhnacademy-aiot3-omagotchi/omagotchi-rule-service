@@ -1,0 +1,9 @@
+spring:
+  config:
+    # 확장자가 없는 .env를 Java properties 형식으로 읽음
+    import: "optional:file:./.env[.properties]"
+
+eureka:
+  client:
+    # Discovery를 함께 실행할 때 .env에서 true로 변경
+    enabled: ${EUREKA_ENABLED:false}

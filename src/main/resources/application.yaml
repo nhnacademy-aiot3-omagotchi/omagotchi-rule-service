@@ -7,6 +7,7 @@ spring:
 
 eureka:
   client:
+    enabled: ${EUREKA_ENABLED:true}
     register-with-eureka: true
     fetch-registry: true
     healthcheck:
