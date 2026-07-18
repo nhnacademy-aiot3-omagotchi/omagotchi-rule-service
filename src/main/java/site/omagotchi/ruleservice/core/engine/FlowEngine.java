@@ -44,7 +44,7 @@ public class FlowEngine {
         for (Wire wire : flow.getWires()) {
             Thread worker = new Thread(
                     () -> this.consumeLoop(wire),
-                    "Worker-" + wire.targetNodeId() + "-" + flowId
+                    "Worker-" + wire.sourceNodeId() + "-" + wire.targetNodeId() + "-" + flowId
             );
             worker.start();
             workers.add(worker);

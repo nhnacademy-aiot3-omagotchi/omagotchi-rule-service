@@ -6,6 +6,7 @@ import site.omagotchi.ruleservice.core.port.InputPort;
 public record Wire(
         Connection connection,
         InputPort targetPort,
+        String sourceNodeId,
         String targetNodeId
 ) {
 }

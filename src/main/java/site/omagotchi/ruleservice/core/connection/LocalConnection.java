@@ -52,7 +52,7 @@ public class LocalConnection implements Connection {
 
     @Override
     public void close() {
-        log.debug("[LocalConnection] {} -> connection 종료, 잔여 메시지 {}건 폐기",
+        log.debug("[{}] connection 종료, 잔여 메시지 {}건 폐기",
                 this.id, this.buffer.size());
         this.buffer.clear();
     }

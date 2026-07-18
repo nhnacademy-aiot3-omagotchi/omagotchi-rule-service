@@ -70,7 +70,7 @@ public class Flow {
 
         Connection connection = new LocalConnection();
 
-        Wire wire = new Wire(connection, in, targetNode.getId());
+        Wire wire = new Wire(connection, in, sourceNode.getId(), targetNode.getId());
         out.connect(connection);
 
         this.wires.add(wire);
