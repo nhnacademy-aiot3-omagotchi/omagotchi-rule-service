@@ -2,7 +2,6 @@ package site.omagotchi.ruleservice.core.registry;
 
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.registry.exception.DuplicateNodeTypeException;
-import site.omagotchi.ruleservice.core.registry.exception.NodeRegistryException;
 import site.omagotchi.ruleservice.core.registry.exception.UnknownNodeTypeException;
 
 import java.util.Map;
