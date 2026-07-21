@@ -35,7 +35,7 @@ public class FlowEngine {
         // 워커 스레드가 아직 돌고 있는데 FlowEngine이 그 존재 자체를 까먹으면 정지시킬 방법이 없어지기 때문에.
         // "먼저 멈추고 나서 지워라" 순서
         if (flowExecution.getFlowState() == FlowState.RUNNING) {
-            throw new IllegalArgumentException("[%s] RUNNING 상태에서는 등록 해제할 수 없습니다. 먼저 stop() 하세요.".formatted(flowId));
+            throw new IllegalStateException("[%s] RUNNING 상태에서는 등록 해제할 수 없습니다. 먼저 stop() 하세요.".formatted(flowId));
         }
 
         executions.remove(flowId);
