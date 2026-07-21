@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.core.parser;
+package site.omagotchi.ruleservice.core.parser.definition;
 
 import java.util.Objects;
 
