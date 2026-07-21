@@ -49,6 +49,10 @@ public class FlowManager {
             flowEngine.unregister(flow.getId());
             throw e;
         }
+
+        // FlowManager가 관리하는 상태로 등록
+        flowEntries.put(flowDef.id(), new FlowEntry(flowDef));
+        log.debug("[{}] 플로우 배포 및 등록 완료", flowDef.id());
     }
 
     private Flow buildFlow(FlowDefinition flowDef) {
