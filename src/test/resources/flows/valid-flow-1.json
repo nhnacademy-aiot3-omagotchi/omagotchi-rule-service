@@ -1,0 +1,12 @@
+{
+  "id": "test-flow-1",
+  "name": "정상 플로우 1",
+  "nodes": [
+    {
+      "id": "nodeA",
+      "type": "SampleSource",
+      "config": {}
+    }
+  ],
+  "connections": []
+}
