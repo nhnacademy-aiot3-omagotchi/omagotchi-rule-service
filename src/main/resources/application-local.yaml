@@ -7,3 +7,6 @@ eureka:
   client:
     # Discovery를 함께 실행할 때 .env에서 true로 변경
     enabled: ${EUREKA_ENABLED:false}
+
+core:
+  base-url: "temp"
