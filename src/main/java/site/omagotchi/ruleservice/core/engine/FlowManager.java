@@ -77,22 +77,19 @@ public class FlowManager {
 
                 flow.addNode(node);
             }
+
+            for (ConnectionDefinition connectionDef : flowDef.connections()) {
+                flow.connect(
+                        connectionDef.sourceNodeId(), connectionDef.sourcePort(),
+                        connectionDef.targetNodeId(), connectionDef.targetPort()
+                );
+            }
         } catch (RuntimeException e) {
             // 원자성 처리 - 노드 생성 도중 실패하면 이미 생성된 노드를 shutdown하고 전체 실패 처리
-            // TODO 아직 initialize()가 호출되지 않은(배포 단계에서 막 생성된) 노드라도 shutdown()을 호출하는 게 안전한지는,
-            //  AbstractNode.shutdown()이 빈 구현이라 문제없지만,
-            //  나중에 실제 노드가 shutdown()을 오버라이드 할 때 "initialize 안 된 상태에서 shutdown이 불려도 안전해야 한다" 라는 제약 하나 생김 (기억할 것)
             for (AbstractNode createdNode : createdNodes) {
                 createdNode.shutdown();
             }
             throw e;
-        }
-
-        for (ConnectionDefinition connectionDef : flowDef.connections()) {
-            flow.connect(
-                    connectionDef.sourceNodeId(), connectionDef.sourcePort(),
-                    connectionDef.targetNodeId(), connectionDef.targetPort()
-            );
         }
 
         return flow;
