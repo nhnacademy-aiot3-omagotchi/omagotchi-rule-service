@@ -1,6 +1,4 @@
-package site.omagotchi.ruleservice.registry;
-
-import site.omagotchi.ruleservice.core.registry.NodeDescriptor;
+package site.omagotchi.ruleservice.core.registry;
 
 import java.util.List;
 
