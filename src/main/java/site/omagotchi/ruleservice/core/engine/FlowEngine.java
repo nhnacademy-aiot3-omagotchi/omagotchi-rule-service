@@ -27,6 +27,21 @@ public class FlowEngine {
         log.debug("[{}] 플로우 등록", flow.getId());
     }
 
+    // 등록 취소 메서드
+    public void unregister(String flowId) {
+        FlowExecution flowExecution = this.requireExecution(flowId);
+
+        // RUNNING 상태에서 바로 지우는 것 막음
+        // 워커 스레드가 아직 돌고 있는데 FlowEngine이 그 존재 자체를 까먹으면 정지시킬 방법이 없어지기 때문에.
+        // "먼저 멈추고 나서 지워라" 순서
+        if (flowExecution.getFlowState() == FlowState.RUNNING) {
+            throw new IllegalArgumentException("[%s] RUNNING 상태에서는 등록 해제할 수 없습니다. 먼저 stop() 하세요.".formatted(flowId));
+        }
+
+        executions.remove(flowId);
+        log.debug("[{}] 플로우 등록 해제", flowId);
+    }
+
     public void start(String flowId) {
         FlowExecution flowExecution = this.requireExecution(flowId);
 
