@@ -1,0 +1,23 @@
+{
+  "id": "sample-flow",
+  "name": "테스트용 샘플 플로우",
+  "description": "StaticFlowLoader 동작 확인용 - 아직 등록된 노드 타입이 없어 배포는 실패해야 정상",
+  "nodes": [
+    {
+      "id": "sample-source",
+      "type": "SampleSource",
+      "config": {}
+    },
+    {
+      "id": "sample-sink",
+      "type": "SampleSink",
+      "config": {}
+    }
+  ],
+  "connections": [
+    {
+      "from": "sample-source:out",
+      "to": "sample-sink:in"
+    }
+  ]
+}

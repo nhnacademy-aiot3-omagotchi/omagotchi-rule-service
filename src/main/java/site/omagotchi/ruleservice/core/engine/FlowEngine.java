@@ -1,6 +1,7 @@
 package site.omagotchi.ruleservice.core.engine;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.flow.Wire;
 import site.omagotchi.ruleservice.core.message.Message;
@@ -9,6 +10,7 @@ import site.omagotchi.ruleservice.core.node.AbstractNode;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Component
 @Slf4j
 public class FlowEngine {
 

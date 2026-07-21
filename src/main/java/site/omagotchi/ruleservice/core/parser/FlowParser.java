@@ -2,6 +2,7 @@ package site.omagotchi.ruleservice.core.parser;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.FlowDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.NodeDefinition;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
+@Component
 @RequiredArgsConstructor
 public class FlowParser {
 
