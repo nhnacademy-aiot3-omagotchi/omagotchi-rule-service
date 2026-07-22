@@ -32,12 +32,20 @@ public class NormalizerNode extends AbstractNode {
         String measurement;
 
         if (topicSegments[0].equals("iot")){
+            if (topicSegments.length < 6) {
+                send("invalid", message.withEntry("reason", "iot 토픽 세그먼트 부족: " + topic));
+                return;
+            }
             location = topicSegments[1];
             point = topicSegments[2];
             deviceEui = topicSegments[4];
             measurement = topicSegments[5];
 
         } else if (topicSegments[0].equals("modbus")) {
+            if (topicSegments.length < 2) {
+                send("invalid", message.withEntry("reason", "modbus 토픽 세그먼트 부족: " + topic));
+                return;
+            }
             location = "modbus";
             point = "gateway";
             deviceEui = null;
