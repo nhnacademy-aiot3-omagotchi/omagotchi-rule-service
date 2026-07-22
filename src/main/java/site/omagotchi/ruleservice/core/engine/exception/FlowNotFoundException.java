@@ -7,6 +7,6 @@ package site.omagotchi.ruleservice.core.engine.exception;
 public class FlowNotFoundException extends FlowManagerException {
 
     public FlowNotFoundException(String flowId) {
-        super("등록되지 않은 플로우입니다: " + flowId);
+        super(FlowErrorCode.FLOW_NOT_FOUND, "flowId = " + flowId);
     }
 }

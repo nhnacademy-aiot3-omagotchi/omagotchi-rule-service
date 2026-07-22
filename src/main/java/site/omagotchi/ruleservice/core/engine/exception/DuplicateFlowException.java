@@ -7,6 +7,6 @@ package site.omagotchi.ruleservice.core.engine.exception;
 public class DuplicateFlowException extends FlowManagerException {
 
     public DuplicateFlowException(String flowId) {
-        super("이미 배포된 플로우입니다: " + flowId);
+        super(FlowErrorCode.FLOW_ALREADY_DEPLOYED, "flowId = " + flowId);
     }
 }
