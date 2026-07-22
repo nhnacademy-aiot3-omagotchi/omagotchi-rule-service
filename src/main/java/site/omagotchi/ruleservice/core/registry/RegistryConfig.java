@@ -1,11 +1,8 @@
-package site.omagotchi.ruleservice.config;
+package site.omagotchi.ruleservice.core.registry;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import site.omagotchi.ruleservice.core.registry.NodeDescriptor;
-import site.omagotchi.ruleservice.core.registry.NodeProvider;
-import site.omagotchi.ruleservice.core.registry.NodeRegistry;
 
 import java.util.List;
 
