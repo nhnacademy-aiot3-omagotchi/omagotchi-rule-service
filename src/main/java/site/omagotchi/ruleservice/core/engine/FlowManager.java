@@ -3,6 +3,7 @@ package site.omagotchi.ruleservice.core.engine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import site.omagotchi.ruleservice.core.engine.dto.FlowSummary;
 import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
@@ -114,7 +115,7 @@ public class FlowManager {
     public void remove(String flowId) {
         this.requireEntry(flowId);
 
-        if(flowEngine.getState(flowId) == FlowState.RUNNING) {
+        if (flowEngine.getState(flowId) == FlowState.RUNNING) {
             flowEngine.stop(flowId);
         }
 
@@ -131,6 +132,35 @@ public class FlowManager {
         this.requireEntry(flowId);
 
         return flowEngine.getState(flowId);
+    }
+
+    /**
+     * 단일 플로우의 요약 정보(구조 + 상태)를 조회
+     * 운영 API의 GET /flows/{id} 응답 조립에 쓰임
+     */
+    public FlowSummary getSummary(String flowId) {
+        this.requireEntry(flowId);
+
+        FlowEntry flowEntry = flowEntries.get(flowId);
+
+        List<String> nodeIds = flowEntry.flowDefinition().nodes().stream()
+                .map(NodeDefinition::id)
+                .toList();
+
+        FlowState flowState = flowEngine.getState(flowId);
+
+        return new FlowSummary(flowId, flowState, nodeIds);
+    }
+
+    /**
+     * 배포된 모든 플로우의 요약 정보를 조회
+     * 운영 API의 GET /flows 응답 조립에 쓰임
+     * @return
+     */
+    public List<FlowSummary> listSummaries() {
+        return flowEntries.keySet().stream() // flowEntries.keySet() = flowId들
+                .map(this::getSummary)
+                .toList();
     }
 
     // FlowManager 차원의 존재 확인
