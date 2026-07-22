@@ -15,6 +15,11 @@ public enum CommonErrorCode implements ErrorCode {
             ErrorType.INVALID_INPUT,
             "COMMON_MALFORMED_REQUEST",
             "요청 본문을 읽을 수 없습니다."
+    ),
+    INTERNAL_ERROR(
+            ErrorType.INTERNAL,
+            "COMMON_INTERNAL_ERROR",
+            "서버 내부 오류가 발생했습니다."
     );
 
     private final ErrorType type;
