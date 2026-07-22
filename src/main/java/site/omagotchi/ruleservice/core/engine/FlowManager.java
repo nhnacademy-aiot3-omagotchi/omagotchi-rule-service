@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.core.engine.dto.FlowSummary;
+import site.omagotchi.ruleservice.core.engine.exception.DuplicateFlowException;
 import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
+import site.omagotchi.ruleservice.core.engine.exception.FlowNotFoundException;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
@@ -34,7 +36,7 @@ public class FlowManager {
         }
 
         if (flowEntries.containsKey(flowDef.id())) {
-            throw new FlowManagerException("이미 배포된 플로우입니다: " + flowDef.id());
+            throw new DuplicateFlowException(flowDef.id());
         }
 
         Flow flow = this.buildFlow(flowDef);
@@ -155,6 +157,7 @@ public class FlowManager {
     /**
      * 배포된 모든 플로우의 요약 정보를 조회
      * 운영 API의 GET /flows 응답 조립에 쓰임
+     *
      * @return
      */
     public List<FlowSummary> listSummaries() {
@@ -166,7 +169,7 @@ public class FlowManager {
     // FlowManager 차원의 존재 확인
     private void requireEntry(String flowId) {
         if (!flowEntries.containsKey(flowId)) {
-            throw new FlowManagerException("등록되지 않은 플로우입니다: " + flowId);
+            throw new FlowNotFoundException(flowId);
         }
     }
 }
