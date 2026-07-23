@@ -124,14 +124,11 @@ public class RabbitTopologyConfig {
     }
     //---------------------
 
-    //TODO: nack의 경우 재발행 시도 콜백 등록
     @Bean
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter messageConverter){
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
         rabbitTemplate.setMessageConverter(messageConverter);
-        rabbitTemplate.setConfirmCallback((correlationData, ack, cause) -> {
-            log.warn("발행 nack. 버퍼에 적재하겠습니다. cause:{}", cause);
-        });
+
         return rabbitTemplate;
     }
 
