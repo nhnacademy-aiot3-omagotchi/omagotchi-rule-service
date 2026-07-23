@@ -6,6 +6,7 @@ import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.inbound.SensorReading;
 import site.omagotchi.ruleservice.rule.domain.QualityEvent;
+import site.omagotchi.ruleservice.rule.infrastructure.messaging.PendingCorrelationData;
 import site.omagotchi.ruleservice.rule.infrastructure.messaging.PendingMessage;
 import site.omagotchi.ruleservice.rule.infrastructure.messaging.PublishRetryBuffer;
 
@@ -50,22 +51,17 @@ public class RabbitPublisherNode extends AbstractNode {
     }
 
     private void publish(String routingKey, Object body, String traceId){
+        PendingMessage pendingMessage = new PendingMessage(exchange, routingKey, body, traceId, publishMode);
+
         try{
             rabbitTemplate.convertAndSend(exchange, routingKey, body, message -> {
                 message.getMessageProperties().setHeader("traceId", traceId);
                 return message;
-            });
+            }, new PendingCorrelationData(pendingMessage));
+
         }catch (Exception e){
             log.error("메시지 발행 실패 - PublishRetryBuffer 적재. routingKey={}, traceId={}", routingKey, traceId, e);
-            retryBuffer.offer(
-                    new PendingMessage(
-                            exchange,
-                            routingKey,
-                            body,
-                            traceId,
-                            publishMode
-                    )
-            );
+            retryBuffer.offer(pendingMessage);
         }
     }
 }
