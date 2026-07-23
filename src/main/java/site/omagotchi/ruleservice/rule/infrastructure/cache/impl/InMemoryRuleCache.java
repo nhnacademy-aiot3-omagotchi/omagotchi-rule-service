@@ -27,7 +27,6 @@ public class InMemoryRuleCache implements RuleCache {
         return rule.ruleHit(value) ? Optional.of(rule) : Optional.empty();
     }
 
-
     /**
      * 룰 단일 등록. <br/>
      * isNewerThan을 통해 입력받은 룰이 최신 버전인지 비교하여 등록 <br/>
@@ -67,8 +66,12 @@ public class InMemoryRuleCache implements RuleCache {
         return count;
     }
 
+    @Override
+    public Collection<ThresholdRule> getAll() {
+        return List.copyOf(rules.values());
+    }
+
     private String generateKey(String deviceEui, String metric) {
         return deviceEui + ":" + metric;
     }
-
 }
