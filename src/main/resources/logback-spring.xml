@@ -8,6 +8,8 @@
         </encoder>
     </appender>
 
+    <logger name="site.omagotchi.ruleservice" level="DEBUG"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>

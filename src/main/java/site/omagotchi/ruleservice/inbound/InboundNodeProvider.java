@@ -25,8 +25,7 @@ public class InboundNodeProvider implements NodeProvider {
                                 id,
                                 sensorProperties.brokerUrl(),
                                 topicFilter,
-                                sensorProperties.clientId()
-                        );
+                                sensorProperties.clientId() + "-" + id                        );
                 }),
                 new NodeDescriptor("Normalizer", "SensorReading 조립 노드"
                         , config -> {

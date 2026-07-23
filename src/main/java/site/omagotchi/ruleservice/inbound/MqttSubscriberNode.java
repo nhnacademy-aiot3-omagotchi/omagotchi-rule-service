@@ -50,7 +50,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
             //콜백 받을 객체 설정
             mqttAsyncClient.setCallback(this);
             //브로커 연결 시도
-            mqttAsyncClient.connect(mqttConnectionOptions);
+            mqttAsyncClient.connect(mqttConnectionOptions).waitForCompletion();
             //토픽으로 구독 신청
             mqttAsyncClient.subscribe(topicFilter,1);
 

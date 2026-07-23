@@ -76,14 +76,19 @@ public class NormalizerNode extends AbstractNode {
             }
             double value = node.get("value").asDouble();
             Instant receivedAt = message.get("receivedAt");
+
+            JsonNode timeNode = node.get("time") != null ? node.get("time") : node.get("timestamp");
+
             Instant measuredAt;
-            if (node.get("time") != null) {
-                measuredAt = Instant.parse(node.get("time").asText());
+            if (timeNode != null) {
+                measuredAt = Instant.parse(timeNode.asText());
             } else {
                 measuredAt = receivedAt;
                 timeSubstituted = true;
             }
-            String deviceName = node.get("device_name").asText();
+
+            JsonNode deviceNameNode = node.get("device_name");
+            String deviceName = deviceNameNode != null ? deviceNameNode.asText() : null;
 
             //SensorReading 조립
             SensorReading sensorReading = new SensorReading(message.getTraceId(), location, point, deviceEui, measurement
