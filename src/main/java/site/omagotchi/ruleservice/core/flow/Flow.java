@@ -24,11 +24,15 @@ public class Flow {
         this.id = id;
     }
 
+    public AbstractNode getNode(String nodeId) {
+        return nodes.get(nodeId);
+    }
+
     public List<AbstractNode> getNodesInOrder() {
         return List.copyOf(nodes.values());
     }
 
-    public List<Wire> getWires(){
+    public List<Wire> getWires() {
         return List.copyOf(wires);
     }
 

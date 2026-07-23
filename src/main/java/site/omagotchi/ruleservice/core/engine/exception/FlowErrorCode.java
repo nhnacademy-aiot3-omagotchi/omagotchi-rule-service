@@ -16,6 +16,11 @@ public enum FlowErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "FLOW_ALREADY_DEPLOYED",
             "이미 배포된 플로우입니다."
+    ),
+    NODE_NOT_FOUND(
+            ErrorType.NOT_FOUND,
+            "NODE_NOT_FOUND",
+            "존재하지 않는 노드입니다."
     );
 
     private final ErrorType type;

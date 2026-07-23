@@ -7,6 +7,7 @@ import site.omagotchi.ruleservice.core.engine.dto.FlowSummary;
 import site.omagotchi.ruleservice.core.engine.exception.DuplicateFlowException;
 import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
 import site.omagotchi.ruleservice.core.engine.exception.FlowNotFoundException;
+import site.omagotchi.ruleservice.core.engine.exception.NodeNotFoundException;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
@@ -134,6 +135,18 @@ public class FlowManager {
         this.requireEntry(flowId);
 
         return flowEngine.getState(flowId);
+    }
+
+    public AbstractNode getNode(String flowId, String nodeId) {
+        this.requireEntry(flowId);
+
+        AbstractNode node = flowEngine.getNode(flowId, nodeId);
+
+        if (Objects.isNull(node)) {
+            throw new NodeNotFoundException(flowId, nodeId);
+        }
+
+        return node;
     }
 
     /**
