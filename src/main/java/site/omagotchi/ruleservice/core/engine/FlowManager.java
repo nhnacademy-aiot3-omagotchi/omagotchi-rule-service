@@ -150,6 +150,22 @@ public class FlowManager {
     }
 
     /**
+     * (flowId, nodeId)의 정적 플로우 정의 config를 조회
+     * FlowConfigService가 최초 PATCH 시 스냅샷의 시작값으로 사용
+     */
+    public Map<String, Object> getNodeConfig(String flowId, String nodeId) {
+        this.requireEntry(flowId);
+
+        FlowEntry flowEntry = flowEntries.get(flowId);
+
+        return flowEntry.flowDefinition().nodes().stream() // 플로우엔트리에서 플로우정의를 뽑아서, 그 플로우 정의 안의 노드정의들을 싹 뽑아서 스트림 걸기
+                .filter(nodeDef -> nodeDef.id().equals(nodeId)) // 노드정의의 아이디가 파라미터로 받은 노드아이디와 같은 것만 걸러냄
+                .findFirst() // 첫 번째 것만 찾음
+                .map(NodeDefinition::config) // 찾은 노드 정의의 config
+                .orElseThrow(() -> new NodeNotFoundException(flowId, nodeId)); // 없으면 예외
+    }
+
+    /**
      * 단일 플로우의 요약 정보(구조 + 상태)를 조회
      * 운영 API의 GET /flows/{id} 응답 조립에 쓰임
      */
