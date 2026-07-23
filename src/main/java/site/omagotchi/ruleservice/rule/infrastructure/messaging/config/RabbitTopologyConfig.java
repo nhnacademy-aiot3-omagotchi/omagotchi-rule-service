@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.rule.infrastructure.messaging;
+package site.omagotchi.ruleservice.rule.infrastructure.messaging.config;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.*;
