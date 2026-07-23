@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.rule.infrastructure.messaging;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -94,6 +95,21 @@ public class PublishRetryBuffer implements SmartLifecycle {
         catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
+    @PostConstruct
+    void registerConfirmCallback() {
+        rabbitTemplate.setConfirmCallback(
+                (correlation, ack, cause) -> {
+                    if (ack) {
+                        return; // 브로커 정상 수신
+                    }
+                    if (correlation instanceof PendingCorrelationData pcd) {
+                        log.warn("발행 nack → 버퍼 재적재. key={}, cause={}", pcd.pending().routingKey(), cause);
+                        offer(pcd.pending());
+                    } else {
+                        log.error("발행 nack인데 복구 정보 없음(CorrelationData 미부착). cause={}", cause);
+                    }
+        });
+    }
 
     @Override
     public void start() {
