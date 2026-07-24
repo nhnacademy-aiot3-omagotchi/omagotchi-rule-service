@@ -12,6 +12,10 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * RabbitMQ에 발행을 실패했을 경우 적재/재발행. <br/><br/>
+ * 1. RabbitPublishNode에서 발행과정에서 Exception이 발생한 경우 <br/>
+ * 2. RabbitPublishNode에서 발행은 성공했지만 RabbitMQ 브로커에서 문제가 발생한 경우*/
 @Slf4j
 @RequiredArgsConstructor
 @Component
@@ -31,6 +35,12 @@ public class PublishRetryBuffer implements SmartLifecycle {
 
     private final RabbitTemplate rabbitTemplate;
 
+    /**
+     * 메세지 적재 메서드. <br/>
+     * 전체 버퍼 크기 (Capacity)가 이미 꽉찬 경우를 고려해 오래된 메시지는 그냥 버림.<br/>
+     * 단, 품질 메시지를 더 중요하게 가중치를 둬 raw부터 버림.
+     * @param pm 원래 RabbitMq에 보내려고했던 메세지에 대한 정보
+     */
     public synchronized void offer(PendingMessage pm) {
         if (pm == null){
             return;
@@ -49,7 +59,21 @@ public class PublishRetryBuffer implements SmartLifecycle {
         q.offer(pm);
     }
 
+    //재발행 작업
+    /** 앱 구동시 데몬 스레드를 하나 만들어 재발행 작업 시작*/
+    @Override
+    public void start() {
+        running = true;
+        worker = new Thread(this::runLoop, "publish-retry-worker");
+        worker.setDaemon(true);
+        worker.start();
+        log.info("PublishRetryBuffer 시작");
+    }
 
+    /**
+     * 지수 백오프를 적용하여 재발행 마저 실패한다면 다시 재발행 시도 (최소 200ms 최대 30s)<br/>
+     * 품질메세지가 더 가중치가높기때문에 우선순위로 poll함
+     */
     private void runLoop() {
         long backoff = MIN_BACKOFF_MS;
         while (running) {
@@ -95,8 +119,10 @@ public class PublishRetryBuffer implements SmartLifecycle {
         catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
+
+    /** 콜백 설정. 브로커가 nack응답을 할때 다시 버퍼에 재적재 및 재발행 시도*/
     @PostConstruct
-    void registerConfirmCallback() {
+    public void registerConfirmCallback() {
         rabbitTemplate.setConfirmCallback(
                 (correlation, ack, cause) -> {
                     if (ack) {
@@ -111,15 +137,9 @@ public class PublishRetryBuffer implements SmartLifecycle {
         });
     }
 
-    @Override
-    public void start() {
-        running = true;
-        worker = new Thread(this::runLoop, "publish-retry-worker");
-        worker.setDaemon(true);
-        worker.start();
-        log.info("PublishRetryBuffer 시작");
-    }
 
+    //중단 작업
+    /** 앱종료시 호출 됨 큐에 남아있는 메세지를 종료 전에 재발행 시도후 스레드 종료*/
     @Override
     public void stop() {
         running = false;

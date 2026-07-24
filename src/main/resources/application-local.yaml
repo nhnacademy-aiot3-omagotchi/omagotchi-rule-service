@@ -8,7 +8,8 @@ spring:
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
     publisher-confirm-type: correlated
-    publisher-returns: true
+#    publisher-returns: true
+
 
 eureka:
   client:

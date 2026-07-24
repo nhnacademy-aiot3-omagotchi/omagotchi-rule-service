@@ -45,7 +45,8 @@ public class RabbitPublisherNode extends AbstractNode {
                 return;
             }
 
-            String routingKey = "quality." + qualityEvent.type().name().toLowerCase() + "." + qualityEvent.deviceEui();
+            String token = qualityEvent.type().name().toLowerCase().replace("_", "");
+            String routingKey = "quality." + token + "." + qualityEvent.deviceEui();
             publish(routingKey, qualityEvent, message.getTraceId());
         }
     }
