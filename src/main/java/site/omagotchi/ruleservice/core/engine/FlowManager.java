@@ -3,7 +3,11 @@ package site.omagotchi.ruleservice.core.engine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import site.omagotchi.ruleservice.core.engine.dto.FlowSummary;
+import site.omagotchi.ruleservice.core.engine.exception.DuplicateFlowException;
 import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
+import site.omagotchi.ruleservice.core.engine.exception.FlowNotFoundException;
+import site.omagotchi.ruleservice.core.engine.exception.NodeNotFoundException;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
@@ -33,7 +37,7 @@ public class FlowManager {
         }
 
         if (flowEntries.containsKey(flowDef.id())) {
-            throw new FlowManagerException("이미 배포된 플로우입니다: " + flowDef.id());
+            throw new DuplicateFlowException(flowDef.id());
         }
 
         Flow flow = this.buildFlow(flowDef);
@@ -114,7 +118,7 @@ public class FlowManager {
     public void remove(String flowId) {
         this.requireEntry(flowId);
 
-        if(flowEngine.getState(flowId) == FlowState.RUNNING) {
+        if (flowEngine.getState(flowId) == FlowState.RUNNING) {
             flowEngine.stop(flowId);
         }
 
@@ -133,10 +137,68 @@ public class FlowManager {
         return flowEngine.getState(flowId);
     }
 
+    public AbstractNode getNode(String flowId, String nodeId) {
+        this.requireEntry(flowId);
+
+        AbstractNode node = flowEngine.getNode(flowId, nodeId);
+
+        if (Objects.isNull(node)) {
+            throw new NodeNotFoundException(flowId, nodeId);
+        }
+
+        return node;
+    }
+
+    /**
+     * (flowId, nodeId)의 정적 플로우 정의 config를 조회
+     * FlowConfigService가 최초 PATCH 시 스냅샷의 시작값으로 사용
+     */
+    public Map<String, Object> getNodeConfig(String flowId, String nodeId) {
+        this.requireEntry(flowId);
+
+        FlowEntry flowEntry = flowEntries.get(flowId);
+
+        return flowEntry.flowDefinition().nodes().stream() // 플로우엔트리에서 플로우정의를 뽑아서, 그 플로우 정의 안의 노드정의들을 싹 뽑아서 스트림 걸기
+                .filter(nodeDef -> nodeDef.id().equals(nodeId)) // 노드정의의 아이디가 파라미터로 받은 노드아이디와 같은 것만 걸러냄
+                .findFirst() // 첫 번째 것만 찾음
+                .map(NodeDefinition::config) // 찾은 노드 정의의 config
+                .orElseThrow(() -> new NodeNotFoundException(flowId, nodeId)); // 없으면 예외
+    }
+
+    /**
+     * 단일 플로우의 요약 정보(구조 + 상태)를 조회
+     * 운영 API의 GET /flows/{id} 응답 조립에 쓰임
+     */
+    public FlowSummary getSummary(String flowId) {
+        this.requireEntry(flowId);
+
+        FlowEntry flowEntry = flowEntries.get(flowId);
+
+        List<String> nodeIds = flowEntry.flowDefinition().nodes().stream()
+                .map(NodeDefinition::id)
+                .toList();
+
+        FlowState flowState = flowEngine.getState(flowId);
+
+        return new FlowSummary(flowId, flowState, nodeIds);
+    }
+
+    /**
+     * 배포된 모든 플로우의 요약 정보를 조회
+     * 운영 API의 GET /flows 응답 조립에 쓰임
+     *
+     * @return
+     */
+    public List<FlowSummary> listSummaries() {
+        return flowEntries.keySet().stream() // flowEntries.keySet() = flowId들
+                .map(this::getSummary)
+                .toList();
+    }
+
     // FlowManager 차원의 존재 확인
     private void requireEntry(String flowId) {
         if (!flowEntries.containsKey(flowId)) {
-            throw new FlowManagerException("등록되지 않은 플로우입니다: " + flowId);
+            throw new FlowNotFoundException(flowId);
         }
     }
 }

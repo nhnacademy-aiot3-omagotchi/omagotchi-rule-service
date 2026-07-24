@@ -25,6 +25,7 @@ management:
         include:
           - health
           - info
+          - metrics
   endpoint:
     health:
       show-details: never
@@ -83,3 +84,9 @@ quality:
       measurement: "temperature"
     - deviceEui: "modbus"
       measurement: "temperature"
+# 로그 패턴에 두 MDC값 모두 노출
+# requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.
+# 한 쪽만 있는 로그 줄에서는 나머지 하나가 빈 문자열로 나옴 (:- 뒤가 기본값)
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [requestId=%X{requestId:-}] [traceId=%X{traceId:-}] %m%n%wEx"

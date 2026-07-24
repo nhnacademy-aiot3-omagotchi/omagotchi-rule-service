@@ -4,6 +4,7 @@ public record ApiErrorResponse(
         int status,
         String code,
         String message,
-        String path
+        String path,
+        String requestId
 ) {
 }

@@ -131,4 +131,8 @@ public class FlowEngine {
     public FlowState getState(String flowId) {
         return this.requireExecution(flowId).getFlowState();
     }
+
+    public AbstractNode getNode(String flowId, String nodeId) {
+        return this.requireExecution(flowId).getFlow().getNode(nodeId);
+    }
 }
