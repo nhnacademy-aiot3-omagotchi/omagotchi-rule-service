@@ -84,7 +84,7 @@ public class RuleSyncClient {
                 }
 
             } catch (Exception e) {
-                log.warn("Core 연결 실패. 룰 미적용 - {}초 후 재시도", backOff);
+                log.warn("Core 연결 실패. 룰 미적용 - {}초 후 재시도", backOff, e);
                 sleep(backOff);
                 backOff = Math.min(backOff * 2, 60);
             } finally {
@@ -115,7 +115,7 @@ public class RuleSyncClient {
                 log.warn("재동기화 보정: {}건", missed);
             }
         } catch (Exception e) {
-            log.warn("재동기화 실패. 기존 캐시 유지");
+            log.warn("재동기화 실패. 기존 캐시 유지", e);
         } finally {
             MDC.remove(MDC_REQUEST_ID_KEY);
         }

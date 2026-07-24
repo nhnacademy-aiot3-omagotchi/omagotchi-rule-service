@@ -64,6 +64,7 @@ public class FlowConfigService {
     private void restore(String flowId, String nodeId, Reconfigurable reconfigurable, Map<String, Object> snapshot) {
         try {
             reconfigurable.reconfigure(snapshot);
+            log.info("[flow={}, node={}] 이전 값으로 원복 완료: {}", flowId, nodeId, snapshot);
         } catch (RuntimeException restoreFailure) {
             log.error("[flow={}, node={}] 원복도 실패 - 노드가 불안정한 상태일 수 있습니다: {}", flowId, nodeId, snapshot, restoreFailure);
         }
