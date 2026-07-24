@@ -9,9 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import site.omagotchi.ruleservice.core.engine.exception.DuplicateFlowException;
 import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
-import site.omagotchi.ruleservice.core.engine.exception.FlowNotFoundException;
 
 import java.util.Objects;
 
@@ -19,7 +17,7 @@ import java.util.Objects;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final String MDC_TRACE_ID_KEY = "traceId";
+    private static final String MDC_REQUEST_ID_KEY = "requestId";
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(
@@ -76,7 +74,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
 
-        // fallback 핸들러에서 원본 예외를 로그로 남김 (traceId로 응답은 추적되는데 서버 로그에서 원인 못 찾는 문제 방지)
+        // fallback 핸들러에서 원본 예외를 로그로 남김 (requestId로 응답은 추적되는데 서버 로그에서 원인 못 찾는 문제 방지)
         log.error("[{}] 처리되지 않은 예외 발생", request.getRequestURI(), exception);
         return response(CommonErrorCode.INTERNAL_ERROR, request);
     }
@@ -94,7 +92,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         HttpStatus status = ErrorHttpStatusMapper.map(errorCode.type());
-        String traceId = MDC.get(MDC_TRACE_ID_KEY);
+        String requestId = MDC.get(MDC_REQUEST_ID_KEY);
 
         return ResponseEntity
                 .status(status)
@@ -103,7 +101,7 @@ public class GlobalExceptionHandler {
                         errorCode.code(),
                         message,
                         request.getRequestURI(),
-                        traceId
+                        requestId
                 ));
     }
 }

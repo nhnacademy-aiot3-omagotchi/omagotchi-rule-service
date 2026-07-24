@@ -5,6 +5,6 @@ public record ApiErrorResponse(
         String code,
         String message,
         String path,
-        String traceId
+        String requestId
 ) {
 }
