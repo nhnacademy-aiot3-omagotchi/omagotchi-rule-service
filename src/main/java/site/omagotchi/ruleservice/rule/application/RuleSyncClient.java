@@ -71,7 +71,7 @@ public class RuleSyncClient {
                 }
 
             } catch (Exception e) {
-                log.warn("Core 연결 실패. 룰 미적용 - {}초 후 재시도", backOff);
+                log.warn("Core 연결 실패. 룰 미적용 - {}초 후 재시도", backOff, e);
                 sleep(backOff);
                 backOff = Math.min(backOff * 2, 60);
             }
