@@ -20,7 +20,7 @@ public class QualityNodeProvider implements NodeProvider {
     @Override
     public List<NodeDescriptor> provide() {
         return List.of(
-                // 1. RangeValidator (기존)
+                // 1. RangeValidator
                 new NodeDescriptor("RangeValidator", "물리 범위 이상치 판정 노드", config -> {
                     String id = (String) config.get("id");
                     return new RangeValidatorNode(id, physicalRangeTable);
