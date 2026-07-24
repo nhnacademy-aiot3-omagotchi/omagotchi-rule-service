@@ -11,7 +11,8 @@ import org.junit.jupiter.api.Test;
 import site.omagotchi.ruleservice.core.engine.FlowEngine;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.message.Message;
-import site.omagotchi.ruleservice.node.builtin.CollectorNode;
+import site.omagotchi.ruleservice.builtin.CollectorNode;
+import site.omagotchi.ruleservice.quality.LastSeenRegistry;
 
 /**
  * MQTT 브로커 없이 normalizer -> collector 파이프라인을 실제 FlowEngine 위에서 돌려,
@@ -37,7 +38,8 @@ class InboundPipelineTest {
     @DisplayName("normalizer -> collector 파이프라인을 통과한 뒤에도 traceId가 최초 입력과 동일하다")
     void traceIdPropagatesThroughNormalizeAndCollect() throws InterruptedException {
         // given: normalizer -> collector 배선 후 엔진 시작
-        NormalizerNode normalizer = new NormalizerNode("normalizer");
+        LastSeenRegistry lastSeenRegistry = new LastSeenRegistry();
+        NormalizerNode normalizer = new NormalizerNode("normalizer",lastSeenRegistry);
         CollectorNode collector = new CollectorNode("collector");
 
         Flow flow = new Flow(FLOW_ID);
@@ -59,7 +61,7 @@ class InboundPipelineTest {
                 "receivedAt", Instant.now()
         ));
 
-        // when: normalizer 입구로 원시 메시지를 밀어넣는다 (MQTTㅍ 수신 콜백 대역)
+        // when: normalizer 입구로 원시 메시지를 밀어넣는다 (MQTT 수신 콜백 대역)
         normalizer.getInputPort("in").receive(input);
 
         // then: 워커 스레드가 collector로 전달할 때까지 최대 2초 대기

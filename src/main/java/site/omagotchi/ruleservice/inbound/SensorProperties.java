@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.config;
+package site.omagotchi.ruleservice.inbound;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

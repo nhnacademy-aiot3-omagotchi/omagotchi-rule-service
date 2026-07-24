@@ -29,10 +29,57 @@ management:
     health:
       show-details: never
 
+core:
+  base-url: "temp"
+
 #fixme
 sensor:
   broker-url: ${SENSOR_BROKER_URL:tcp://localhost:1883}
   client-id: ${SENSOR_CLIENT_ID:rule-engine-1}
 
-core:
-  base-url: "temp"
+quality:
+  ranges:
+    temperature:
+      min: -20
+      max: 60
+    humidity:
+      min: 0
+      max: 100
+    co2:
+      min: 300
+      max: 5000
+    pressure:
+      min: 800
+      max: 1100
+    tvoc:
+      min: 0
+      max: 60000
+    illumination:
+      min: 0
+      # max 없음 (상한 없음 → Double max가 null이 됨)
+    battery:
+      min: 0
+      max: 100
+    door:
+      min: 0
+      max: 1
+
+  inventory:
+    - deviceEui: "24e124126d152862"
+      measurement: "temperature"
+    - deviceEui: "24e124126d152590"
+      measurement: "temperature"
+    - deviceEui: "24e124128c067999"
+      measurement: "temperature"
+    - deviceEui: "24e124128c140101"
+      measurement: "temperature"
+    - deviceEui: "24e124136d151836"
+      measurement: "temperature"
+    - deviceEui: "24e124725d081175"
+      measurement: "temperature"
+    - deviceEui: "24e124785c389010"
+      measurement: "temperature"
+    - deviceEui: "24e124725d089152"
+      measurement: "temperature"
+    - deviceEui: "modbus"
+      measurement: "temperature"

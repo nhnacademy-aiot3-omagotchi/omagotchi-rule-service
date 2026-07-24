@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.node.builtin;
+package site.omagotchi.ruleservice.builtin;
 
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.core.registry.NodeDescriptor;

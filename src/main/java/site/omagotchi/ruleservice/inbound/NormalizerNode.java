@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
+import site.omagotchi.ruleservice.quality.LastSeenRegistry;
+import site.omagotchi.ruleservice.quality.QualityEvent;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -12,12 +14,14 @@ import java.util.Map;
 
 public class NormalizerNode extends AbstractNode {
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final LastSeenRegistry lastSeenRegistry;
 
-    public NormalizerNode(String id) {
+    public NormalizerNode(String id, LastSeenRegistry lastSeenRegistry) {
         super(id);
         addInputPort("in");
         addOutputPort("out");
         addOutputPort("invalid");
+        this.lastSeenRegistry = lastSeenRegistry;
     }
 
     @Override
@@ -33,7 +37,8 @@ public class NormalizerNode extends AbstractNode {
 
         if (topicSegments[0].equals("iot")){
             if (topicSegments.length < 6) {
-                send("invalid", message.withEntry("reason", "iot 토픽 세그먼트 부족: " + topic));
+                QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"iot 토픽 세그먼트 부족: " + topic);
+                send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
             }
             location = topicSegments[1];
@@ -43,16 +48,18 @@ public class NormalizerNode extends AbstractNode {
 
         } else if (topicSegments[0].equals("modbus")) {
             if (topicSegments.length < 2) {
-                send("invalid", message.withEntry("reason", "modbus 토픽 세그먼트 부족: " + topic));
+                QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"modbus 토픽 세그먼트 부족: " + topic);
+                send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
             }
             location = "modbus";
             point = "gateway";
-            deviceEui = null;
+            deviceEui = "modbus"; //missingDetector에 이용
             measurement = topicSegments[1];
 
         } else {
-            send("invalid", message.withEntry("reason", "알 수 없는 토픽 형식: " + topic));
+            QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"알 수 없는 토픽 형식: " + topic);
+            send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
             return;
         }
 
@@ -71,7 +78,8 @@ public class NormalizerNode extends AbstractNode {
             boolean timeSubstituted = false;
 
             if (node.get("value") == null) {
-                send("invalid", message.withEntry("reason", "value 누락"));
+                QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"value: 누락");
+                send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
             }
             double value = node.get("value").asDouble();
@@ -93,10 +101,13 @@ public class NormalizerNode extends AbstractNode {
             //SensorReading 조립
             SensorReading sensorReading = new SensorReading(message.getTraceId(), location, point, deviceEui, measurement
                     , value, measuredAt, receivedAt, deviceName);
+            //수신 기록
+            lastSeenRegistry.update(sensorReading.deviceEui(),sensorReading.measurement(),sensorReading.receivedAt());
 
             send("out",Message.of(message.getTraceId(), Map.of("sensorReading",sensorReading, "_timeSubstituted",timeSubstituted)));
         } catch (JsonProcessingException | DateTimeParseException e) {
-            send("invalid", message.withEntry("reason", "payload 파싱 실패: " + e.getMessage()));
+            QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"payload 파싱 실패: " + e.getMessage());
+            send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
         }
     }
 

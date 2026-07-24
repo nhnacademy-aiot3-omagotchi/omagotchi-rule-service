@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.node.builtin;
+package site.omagotchi.ruleservice.builtin;
 
 import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.core.message.Message;

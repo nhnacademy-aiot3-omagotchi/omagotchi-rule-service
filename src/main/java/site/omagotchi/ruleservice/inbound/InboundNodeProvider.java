@@ -2,9 +2,9 @@ package site.omagotchi.ruleservice.inbound;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import site.omagotchi.ruleservice.config.SensorProperties;
 import site.omagotchi.ruleservice.core.registry.NodeDescriptor;
 import site.omagotchi.ruleservice.core.registry.NodeProvider;
+import site.omagotchi.ruleservice.quality.LastSeenRegistry;
 
 import java.util.List;
 
@@ -13,6 +13,7 @@ import java.util.List;
 public class InboundNodeProvider implements NodeProvider {
 
     private final SensorProperties sensorProperties;
+    private final LastSeenRegistry lastSeenRegistry;
 
     @Override
     public List<NodeDescriptor> provide() {
@@ -30,7 +31,7 @@ public class InboundNodeProvider implements NodeProvider {
                 new NodeDescriptor("Normalizer", "SensorReading 조립 노드"
                         , config -> {
                         String id = (String) config.get("id");
-                        return new NormalizerNode(id);
+                        return new NormalizerNode(id,lastSeenRegistry);
                 })
         );
     }
