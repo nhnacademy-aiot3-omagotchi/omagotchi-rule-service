@@ -1,0 +1,8 @@
+### 전체 합산
+GET http://localhost:8081/actuator/metrics/mqtt.messages.received
+
+### iot만
+GET http://localhost:8081/actuator/metrics/mqtt.messages.received?tag=topicFilter:iot/#
+
+### modbus만
+GET http://localhost:8081/actuator/metrics/mqtt.messages.received?tag=topicFilter:modbus/#
