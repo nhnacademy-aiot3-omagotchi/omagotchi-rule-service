@@ -9,6 +9,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
+import site.omagotchi.ruleservice.core.engine.exception.NodeNotFoundException;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.FlowDefinition;
@@ -16,6 +17,7 @@ import site.omagotchi.ruleservice.core.parser.definition.NodeDefinition;
 import site.omagotchi.ruleservice.core.registry.NodeRegistry;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -308,6 +310,85 @@ class FlowManagerTest {
         void getStatusForUnregisteredFlowThrowsException() {
             assertThatThrownBy(() -> flowManager.getStatus("ghost"))
                     .isInstanceOf(FlowManagerException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("getNode / getNodeConfig")
+    class GetNodeAndGetNodeConfig {
+
+        @Test
+        @DisplayName("존재하는 노드를 조회하면 flowEngine이 반환한 노드 인스턴스를 그대로 돌려준다")
+        void getNodeReturnsNodeFromFlowEngineTest() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+
+            flowManager.deploy(flowDef);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(node);
+
+            AbstractNode result = flowManager.getNode("flow-1", "nodeA");
+
+            assertThat(result).isSameAs(node);
+        }
+
+        @Test
+        @DisplayName("등록되지 않은 flowId로 getNode()를 호출하면 FlowManagerException을 던진다")
+        void getNodeForUnregisteredFlowThrowsException() {
+            assertThatThrownBy(() -> flowManager.getNode("ghost", "nodeA"))
+                    .isInstanceOf(FlowManagerException.class);
+
+            verify(flowEngine, never()).getNode(any(), any());
+        }
+
+        @Test
+        @DisplayName("존재하는 플로우인데 없는 노드면 NodeNotFoundException을 던진다")
+        void getNodeForMissingNodeThrowsNodeNotFoundException() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+            when(flowEngine.getNode("flow-1", "ghost-node")).thenReturn(null);
+
+            assertThatThrownBy(() -> flowManager.getNode("flow-1", "ghost-node"))
+                    .isInstanceOf(NodeNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("정적 정의의 config를 그대로 조회한다")
+        void getNodeConfigReturnsStaticDefinitionConfig() {
+            Map<String, Object> config = Map.of("min", 300, "max", 5000);
+            FlowDefinition flowDef = new FlowDefinition(
+                    "flow-1", null, null,
+                    List.of(new NodeDefinition("nodeA", "SampleSource", config)),
+                    null
+            );
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            Map<String, Object> result = flowManager.getNodeConfig("flow-1", "nodeA");
+
+            assertThat(result).containsExactlyInAnyOrderEntriesOf(config);
+        }
+
+        @Test
+        @DisplayName("등록되지 않은 flowId로 getNodeConfig()를 호출하면 FlowManagerException을 던진다")
+        void getNodeConfigForUnregisteredFlowThrowsException() {
+            assertThatThrownBy(() -> flowManager.getNodeConfig("ghost", "nodeA"))
+                    .isInstanceOf(FlowManagerException.class);
+        }
+
+        @Test
+        @DisplayName("존재하는 플로우인데 없는 노드면 getNodeConfig()도 NodeNotFoundException을 던진다")
+        void getNodeConfigForMissingNodeThrowsNodeNotFoundException() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            assertThatThrownBy(() -> flowManager.getNodeConfig("flow-1", "ghost-node"))
+                    .isInstanceOf(NodeNotFoundException.class);
         }
     }
 }

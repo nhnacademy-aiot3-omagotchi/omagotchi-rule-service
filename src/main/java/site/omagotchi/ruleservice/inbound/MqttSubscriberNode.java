@@ -1,5 +1,7 @@
 package site.omagotchi.ruleservice.inbound;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.*;
 import org.eclipse.paho.mqttv5.common.MqttException;
@@ -13,31 +15,33 @@ import java.util.Map;
 
 @Slf4j
 public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
+
     private final String brokerUrl;
     private final String topicFilter;
     private final String clientId;
+    private final Counter receivedCounter;
     private MqttAsyncClient mqttAsyncClient;
 
-    public MqttSubscriberNode(String id, String brokerUrl, String topicFilter, String clientId) {
+    public MqttSubscriberNode(String id, String brokerUrl, String topicFilter,
+                              String clientId, MeterRegistry meterRegistry) {
         super(id);
 
         this.brokerUrl = brokerUrl;
         this.topicFilter = topicFilter;
         this.clientId = clientId;
+        this.receivedCounter = meterRegistry.counter("mqtt.messages.received", "topicFilter", topicFilter);
 
         addOutputPort("out");
     }
 
     @Override
     protected void onProcess(Message message) {
-
+        // 빈 구현
     }
 
     @Override
     public void initialize() {
-
         try {
-
             MqttConnectionOptions mqttConnectionOptions = new MqttConnectionOptions();
             //브로커와 연결이 끊기면 자동으로 재연결 시도
             mqttConnectionOptions.setAutomaticReconnect(true);
@@ -52,7 +56,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
             //브로커 연결 시도
             mqttAsyncClient.connect(mqttConnectionOptions).waitForCompletion();
             //토픽으로 구독 신청
-            mqttAsyncClient.subscribe(topicFilter,1);
+            mqttAsyncClient.subscribe(topicFilter, 1);
 
         } catch (MqttException e) {
             log.error("[{}] MQTT 초기화 실패 (brokerUrl={})", getId(), brokerUrl, e);
@@ -77,6 +81,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
 
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
+        receivedCounter.increment();
 
         String payloadStr = new String(message.getPayload());
 
