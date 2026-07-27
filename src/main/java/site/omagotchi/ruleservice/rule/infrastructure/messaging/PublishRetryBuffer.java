@@ -1,9 +1,9 @@
 package site.omagotchi.ruleservice.rule.infrastructure.messaging;
 
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.rule.infrastructure.messaging.node.PublishMode;
@@ -17,16 +17,17 @@ import java.util.concurrent.atomic.AtomicLong;
  * 1. RabbitPublishNode에서 발행과정에서 Exception이 발생한 경우 <br/>
  * 2. RabbitPublishNode에서 발행은 성공했지만 RabbitMQ 브로커에서 문제가 발생한 경우*/
 @Slf4j
-@RequiredArgsConstructor
 @Component
 public class PublishRetryBuffer implements SmartLifecycle {
-    private static final int  CAPACITY       = 100_000;
-    private static final long MIN_BACKOFF_MS = 200;
-    private static final long MAX_BACKOFF_MS = 30_000;
-    private static final long IDLE_SLEEP_MS  = 200;
+    private static final int  DEFAULT_CAPACITY = 100_000;
+    private static final long MIN_BACKOFF_MS   = 200;
+    private static final long MAX_BACKOFF_MS   = 30_000;
+    private static final long IDLE_SLEEP_MS    = 200;
 
-    private final BlockingQueue<PendingMessage> qualityQ = new LinkedBlockingQueue<>(CAPACITY);
-    private final BlockingQueue<PendingMessage> rawQ     = new LinkedBlockingQueue<>(CAPACITY);
+    private final int capacity;
+
+    private final BlockingQueue<PendingMessage> qualityQ = new LinkedBlockingQueue<>();
+    private final BlockingQueue<PendingMessage> rawQ     = new LinkedBlockingQueue<>();
 
     private final AtomicLong droppedCount = new AtomicLong();
 
@@ -34,6 +35,18 @@ public class PublishRetryBuffer implements SmartLifecycle {
     private Thread worker;
 
     private final RabbitTemplate rabbitTemplate;
+
+
+    @Autowired
+    public PublishRetryBuffer(RabbitTemplate rabbitTemplate){
+        this(rabbitTemplate, DEFAULT_CAPACITY);
+    }
+
+    /** 테스트/튜닝용 - 버퍼 상한을 지정하여 생성 */
+    public PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity){
+        this.rabbitTemplate = rabbitTemplate;
+        this.capacity = capacity;
+    }
 
     /**
      * 메세지 적재 메서드. <br/>
@@ -45,7 +58,7 @@ public class PublishRetryBuffer implements SmartLifecycle {
         if (pm == null){
             return;
         }
-        while (rawQ.size() + qualityQ.size() >= CAPACITY) {
+        while (rawQ.size() + qualityQ.size() >= capacity) {
             PendingMessage victim = rawQ.poll();
             if (victim == null){
                 victim = qualityQ.poll();
@@ -167,5 +180,13 @@ public class PublishRetryBuffer implements SmartLifecycle {
 
     public long getDroppedCount() {
         return droppedCount.get();
+    }
+
+    public int getQualityQSize(){
+        return qualityQ.size();
+    }
+
+    public int getRawQSize(){
+        return rawQ.size();
     }
 }
