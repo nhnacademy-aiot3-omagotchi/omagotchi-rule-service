@@ -181,4 +181,12 @@ public class PublishRetryBuffer implements SmartLifecycle {
     public long getDroppedCount() {
         return droppedCount.get();
     }
+
+    public int getQualityQSize(){
+        return qualityQ.size();
+    }
+
+    public int getRawQSize(){
+        return rawQ.size();
+    }
 }
