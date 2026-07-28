@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/flows")
+@RequestMapping("/api/v1/flows")
 @RequiredArgsConstructor
 public class FlowController {
 
