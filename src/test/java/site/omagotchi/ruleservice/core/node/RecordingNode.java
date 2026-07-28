@@ -29,7 +29,8 @@ public class RecordingNode extends AbstractNode {
     }
 
     public RecordingNode(String id) {
-        this(id, message -> {});
+        this(id, message -> {
+        });
     }
 
     @Override

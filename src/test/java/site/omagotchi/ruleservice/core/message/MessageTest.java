@@ -110,4 +110,41 @@ class MessageTest {
 
         assertThat(message.getTraceId()).isEqualTo(traceId);
     }
+
+    @Test
+    @DisplayName("withHeader() 후 원본 헤더는 불변이고, 새 Message에는 헤더가 존재한다")
+    void withHeaderAddsHeaderToNewMessageOnly() {
+        Message original = Message.of(Map.of("value", 27.9));
+
+        Message updated = original.withHeader("source", "mqtt");
+
+        assertThat(original.getHeaders()).isEmpty();
+        assertThat(updated.getHeaders()).containsEntry("source", "mqtt");
+    }
+
+    @Test
+    @DisplayName("withoutKey()는 해당 키가 제거된 새 Message를 반환하고, 원본에는 키가 남아있다")
+    void withoutKeyRemovesKeyOnlyFromNewMessage() {
+        Message original = Message.of(Map.of("value", 27.9, "unit", "ppm"));
+
+        Message updated = original.withoutKey("unit");
+
+        assertThat(updated.hasKey("unit")).isFalse();
+        assertThat(original.hasKey("unit")).isTrue();
+    }
+
+    @Test
+    @DisplayName("toString()은 null이 아니고 traceId 일부와 payload 내용을 포함한다")
+    void toStringContainsTraceIdPrefixAndPayload() {
+        Message message = Message.of(Map.of("value", 27.9));
+        String shortTraceId = message.getTraceId().substring(0, 8);
+
+        String result = message.toString();
+
+        assertThat(result)
+                .isNotNull()
+                .contains(shortTraceId)
+                .contains("value")
+                .contains("27.9");
+    }
 }
