@@ -68,22 +68,31 @@ quality:
   inventory:
     - deviceEui: "24e124126d152862"
       measurement: "temperature"
+      expectedIntervalSeconds: 60
     - deviceEui: "24e124126d152590"
       measurement: "temperature"
+      expectedIntervalSeconds: 60
     - deviceEui: "24e124128c067999"
       measurement: "temperature"
+      expectedIntervalSeconds: 60
     - deviceEui: "24e124128c140101"
       measurement: "temperature"
+      expectedIntervalSeconds: 900
     - deviceEui: "24e124136d151836"
       measurement: "temperature"
+      expectedIntervalSeconds: 60
     - deviceEui: "24e124725d081175"
       measurement: "temperature"
+      expectedIntervalSeconds: 60
     - deviceEui: "24e124785c389010"
       measurement: "temperature"
+      expectedIntervalSeconds: 60
     - deviceEui: "24e124725d089152"
       measurement: "temperature"
+      expectedIntervalSeconds: 900
     - deviceEui: "modbus"
       measurement: "temperature"
+      expectedIntervalSeconds: 5
 # 로그 패턴에 두 MDC값 모두 노출
 # requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.
 # 한 쪽만 있는 로그 줄에서는 나머지 하나가 빈 문자열로 나옴 (:- 뒤가 기본값)

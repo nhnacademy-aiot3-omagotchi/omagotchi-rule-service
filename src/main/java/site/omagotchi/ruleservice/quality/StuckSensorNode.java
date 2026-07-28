@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class StuckSensorNode extends AbstractNode {
 
     private static final Duration STUCK_THRESHOLD = Duration.ofMinutes(30);
+    private static final Duration RE_ALERT_INTERVAL = Duration.ofHours(6);
     private final Map<String, StuckState> stateMap = new ConcurrentHashMap<>();
 
     public StuckSensorNode(String id) {
@@ -21,9 +22,9 @@ public class StuckSensorNode extends AbstractNode {
         addOutputPort("stuck");
     }
 
-    //마지막으로 본 값, 시각, 알림 여부
+    //마지막으로 본 값, 시각, 마지막 알림 시각
     private record StuckState(
-            double lastValue, Instant since, boolean alerted
+            double lastValue, Instant since, Instant lastAlertedAt
     ){
 
     }
@@ -45,22 +46,24 @@ public class StuckSensorNode extends AbstractNode {
 
         //처음 보는 센서값이면 out
         if(stuckState == null){
-            stateMap.put(key, new StuckState(value,now,false));
+            stateMap.put(key, new StuckState(value,now,null));
             send("out", message);
             return;
         }
         //값이 바뀌었으면 out
         if(value != stuckState.lastValue()){
-            stateMap.put(key,new StuckState(value,now,false));
+            stateMap.put(key,new StuckState(value,now,null));
             send("out", message);
             return;
         }
-        //값이 같고 임계값을 넘었을 경우 stuck
+        //임계값을 넘었을 경우 stuck
         Duration stuckDuration = Duration.between(stuckState.since(), now);
-        if(stuckDuration.compareTo(STUCK_THRESHOLD) > 0 && !stuckState.alerted()){
+        boolean shouldAlert = stuckState.lastAlertedAt() == null
+                || Duration.between(stuckState.lastAlertedAt(), now).compareTo(RE_ALERT_INTERVAL) > 0;
+        if(stuckDuration.compareTo(STUCK_THRESHOLD) > 0 && shouldAlert){
             QualityEvent qualityEvent = QualityEvent.from(sensorReading, QualityEvent.Type.STUCK,"무변동: "+ stuckDuration.toMinutes() + "분");
             send("stuck",Message.of(sensorReading.traceId(), Map.of("qualityEvent",qualityEvent)));
-            stateMap.put(key,new StuckState(value,stuckState.since(),true));
+            stateMap.put(key,new StuckState(value,stuckState.since(),now));
         }
         //어느 경우도 아닐 경우 out
         send("out",message);
