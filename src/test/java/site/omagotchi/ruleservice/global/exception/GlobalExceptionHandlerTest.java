@@ -15,8 +15,6 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
-import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
-import site.omagotchi.ruleservice.core.engine.exception.NodeNotFoundException;
 
 import java.util.List;
 
@@ -61,25 +59,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("FlowErrorCode를 가진 FlowManagerException은 그 코드에 맞는 상태로 응답한다")
-    void handlesFlowManagerExceptionWithErrorCode() {
-        NodeNotFoundException exception = new NodeNotFoundException("flow-1", "node-a");
+    @DisplayName("detail이 있으면 응답 message에 에러코드 메시지와 함께 실린다")
+    void includesDetailInResponseMessage() {
+        BusinessException exception = new BusinessException(FlowErrorCode.NODE_CONFIG_REJECTED, "flowId = flow-1, nodeId = node-a, reason = threshold는 0 이상이어야 합니다");
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleFlowManagerException(exception, request);
+        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleBusinessException(exception, request);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody().code()).isEqualTo(FlowErrorCode.NODE_NOT_FOUND.code());
-    }
-
-    @Test
-    @DisplayName("FlowErrorCode가 없는 FlowManagerException은 500(COMMON_INTERNAL_ERROR)으로 응답한다")
-    void handlesFlowManagerExceptionWithoutErrorCode() {
-        FlowManagerException exception = new FlowManagerException("id 불일치 같은 내부 오류");
-
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleFlowManagerException(exception, request);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_ERROR");
+        assertThat(response.getBody().message()).isEqualTo(FlowErrorCode.NODE_CONFIG_REJECTED.message() + " - flowId = flow-1, nodeId = node-a, reason = threshold는 0 이상이어야 합니다");
     }
 
     @Test

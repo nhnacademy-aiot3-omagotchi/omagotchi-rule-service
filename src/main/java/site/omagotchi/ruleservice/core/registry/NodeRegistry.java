@@ -1,8 +1,6 @@
 package site.omagotchi.ruleservice.core.registry;
 
 import site.omagotchi.ruleservice.core.node.AbstractNode;
-import site.omagotchi.ruleservice.core.registry.exception.DuplicateNodeTypeException;
-import site.omagotchi.ruleservice.core.registry.exception.UnknownNodeTypeException;
 
 import java.util.Map;
 import java.util.Objects;
@@ -19,7 +17,7 @@ public class NodeRegistry {
         }
 
         if (descriptors.containsKey(nodeDescriptor.typeName())) {
-            throw new DuplicateNodeTypeException("이미 등록된 노드 타입입니다: " + nodeDescriptor.typeName());
+            throw new IllegalStateException("이미 등록된 노드 타입입니다: " + nodeDescriptor.typeName());
         }
 
         descriptors.put(nodeDescriptor.typeName(), nodeDescriptor);
@@ -32,7 +30,7 @@ public class NodeRegistry {
 
         NodeDescriptor nodeDescriptor = descriptors.get(typeName);
         if (Objects.isNull(nodeDescriptor)) {
-            throw new UnknownNodeTypeException("등록되지 않은 노드 타입입니다: " + typeName + " (등록된 타입: " + getRegisteredTypes() + ")");
+            throw new IllegalArgumentException("등록되지 않은 노드 타입입니다: " + typeName + " (등록된 타입: " + getRegisteredTypes() + ")");
         }
 
         return nodeDescriptor.nodeFactory().create(config);

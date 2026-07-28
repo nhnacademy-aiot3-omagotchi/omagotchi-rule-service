@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.omagotchi.ruleservice.core.engine.FlowManager;
-import site.omagotchi.ruleservice.core.engine.exception.NodeConfigRejectedException;
-import site.omagotchi.ruleservice.core.engine.exception.NodeNotReconfigurableException;
+import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.node.Reconfigurable;
+import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,10 +29,11 @@ public class FlowConfigService {
      * -> PATCH는 자주 운영되는 게 아니라 일단 이렇게 하기는 했으나, 혹시 나중에 이 부분이 병목이 되면 그때 노드별 락으로 세분화
      */
     public synchronized void reconfigure(String flowId, String nodeId, Map<String, Object> newConfig) {
-        AbstractNode node = flowManager.getNode(flowId, nodeId); // 없으면 NodeNotFoundException(404)
+        AbstractNode node = flowManager.getNode(flowId, nodeId); // 없으면 BusinessException(404)
 
         if (!(node instanceof Reconfigurable reconfigurable)) {
-            throw new NodeNotReconfigurableException(flowId, nodeId);
+            throw new BusinessException(FlowErrorCode.NODE_NOT_RECONFIGURABLE, "flowId = %s, nodeId = %s"
+                    .formatted(flowId, nodeId));
         }
 
         String key = flowId + ":" + nodeId;
@@ -56,7 +57,9 @@ public class FlowConfigService {
         } catch (RuntimeException e) {
             log.error("[flow={}, node={}] config 적용 실패 - 이전 값으로 원복 시도: {}", flowId, nodeId, newConfig, e);
             this.restore(flowId, nodeId, reconfigurable, snapshot); // 방어적 원복 시도
-            throw new NodeConfigRejectedException(flowId, nodeId, e.getMessage());
+
+            throw new BusinessException(FlowErrorCode.NODE_CONFIG_REJECTED,
+                    "flowId = %s, nodeId = %s, reason = %s".formatted(flowId, nodeId, e.getMessage()));
         }
     }
 

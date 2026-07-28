@@ -4,16 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.core.engine.dto.FlowSummary;
-import site.omagotchi.ruleservice.core.engine.exception.DuplicateFlowException;
-import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
-import site.omagotchi.ruleservice.core.engine.exception.FlowNotFoundException;
-import site.omagotchi.ruleservice.core.engine.exception.NodeNotFoundException;
+import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
 import site.omagotchi.ruleservice.core.flow.Flow;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.FlowDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.NodeDefinition;
 import site.omagotchi.ruleservice.core.registry.NodeRegistry;
+import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,7 +35,7 @@ public class FlowManager {
         }
 
         if (flowEntries.containsKey(flowDef.id())) {
-            throw new DuplicateFlowException(flowDef.id());
+            throw new BusinessException(FlowErrorCode.FLOW_ALREADY_DEPLOYED, "flowId = " + flowDef.id());
         }
 
         Flow flow = this.buildFlow(flowDef);
@@ -75,7 +73,7 @@ public class FlowManager {
                 // 만들어진 노드의 id와 실제로 일치하는지 검증
                 // 이 검증이 없으면 flow.addNode(node)가 엉뚱한 id로 등록되고, 나중에 connect()가 NodeDefinition.id() 기준으로 찾다가 "노드를 찾을 수 없습니다" 같은 에러 발생할 수 있음
                 if (!Objects.equals(node.getId(), nodeDef.id())) {
-                    throw new FlowManagerException("[flow = %s] NodeFactory가 반환한 id(%s)가 정의된 id(%s)와 일치하지 않습니다."
+                    throw new IllegalStateException("[flow = %s] NodeFactory가 반환한 id(%s)가 정의된 id(%s)와 일치하지 않습니다."
                             .formatted(flowDef.id(), node.getId(), nodeDef.id()));
                 }
 
@@ -143,7 +141,7 @@ public class FlowManager {
         AbstractNode node = flowEngine.getNode(flowId, nodeId);
 
         if (Objects.isNull(node)) {
-            throw new NodeNotFoundException(flowId, nodeId);
+            throw nodeNotFound(flowId, nodeId);
         }
 
         return node;
@@ -162,7 +160,7 @@ public class FlowManager {
                 .filter(nodeDef -> nodeDef.id().equals(nodeId)) // 노드정의의 아이디가 파라미터로 받은 노드아이디와 같은 것만 걸러냄
                 .findFirst() // 첫 번째 것만 찾음
                 .map(NodeDefinition::config) // 찾은 노드 정의의 config
-                .orElseThrow(() -> new NodeNotFoundException(flowId, nodeId)); // 없으면 예외
+                .orElseThrow(() -> nodeNotFound(flowId, nodeId)); // 없으면 예외
     }
 
     /**
@@ -186,8 +184,6 @@ public class FlowManager {
     /**
      * 배포된 모든 플로우의 요약 정보를 조회
      * 운영 API의 GET /flows 응답 조립에 쓰임
-     *
-     * @return
      */
     public List<FlowSummary> listSummaries() {
         return flowEntries.keySet().stream() // flowEntries.keySet() = flowId들
@@ -198,7 +194,12 @@ public class FlowManager {
     // FlowManager 차원의 존재 확인
     private void requireEntry(String flowId) {
         if (!flowEntries.containsKey(flowId)) {
-            throw new FlowNotFoundException(flowId);
+            throw new BusinessException(FlowErrorCode.FLOW_NOT_FOUND, "flowId = " + flowId);
         }
+    }
+
+    private static BusinessException nodeNotFound(String flowId, String nodeId) {
+        return new BusinessException(FlowErrorCode.NODE_NOT_FOUND, "flowId = %s, nodeId = %s"
+                .formatted(flowId, nodeId));
     }
 }

@@ -57,7 +57,7 @@ class RequestIdFilterTest {
     }
 
     @Test
-    @DisplayName("X-Request-ID가 없으면 새로 UUID를 발급한다")
+    @DisplayName("X-Request-ID가 없으면 새로 발급한다")
     void generatesNewRequestIdWhenHeaderMissingTest() throws ServletException, IOException {
         when(request.getHeader(REQUEST_ID_HEADER)).thenReturn(null);
 
