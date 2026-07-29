@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalConnectionTest {
 
@@ -143,5 +144,24 @@ class LocalConnectionTest {
         conn.deliver(Message.of(Map.of("order", 2)));
 
         assertThat(conn.getBufferSize()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("버퍼 용량이 0 이하이면 IllegalArgumentException을 던진다")
+    void invalidBufferCapacityThrowsException() {
+        assertThatThrownBy(() -> new LocalConnection(0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LocalConnection(-1)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("close()하면 버퍼에 남아있던 메시지가 전부 폐기된다")
+    void closeDiscardsRemainingMessages() throws InterruptedException {
+        LocalConnection conn = new LocalConnection();
+        conn.deliver(Message.of(Map.of("order", 1)));
+        conn.deliver(Message.of(Map.of("order", 2)));
+
+        conn.close();
+
+        assertThat(conn.getBufferSize()).isZero();
     }
 }

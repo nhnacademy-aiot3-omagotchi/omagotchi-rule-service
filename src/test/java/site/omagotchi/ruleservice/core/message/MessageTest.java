@@ -147,4 +147,21 @@ class MessageTest {
                 .contains("value")
                 .contains("27.9");
     }
+
+    @Test
+    @DisplayName("Message.of(traceId, payload)에서 traceId가 null이거나 비어있으면 IllegalArgumentException 던진다")
+    void ofWithBlankTraceIdThrowsException() {
+        assertThatThrownBy(() -> Message.of(null, Map.of("value", 1)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> Message.of("", Map.of("value", 1)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Message.of(traceId, payload)에서 payload가 null이면 IllegalArgumentException 던진다")
+    void ofWithNullPayloadThrowsException() {
+        assertThatThrownBy(() -> Message.of("trace-1", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

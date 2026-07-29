@@ -71,4 +71,30 @@ class FlowTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("nodeB에 InputPort가 없습니다: in");
     }
+
+    @Test
+    @DisplayName("id가 null이거나 비어있으면 생성 시 IllegalArgumentException을 던진다")
+    void constructorWithBlankIdThrowsException() {
+        assertThatThrownBy(() -> new Flow(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Flow("")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("addNode()에 null을 전달하면 IllegalArgumentException을 던진다")
+    void addNodeWithNullThrowsException() {
+        Flow flow = new Flow("flow-1");
+
+        assertThatThrownBy(() -> flow.addNode(null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("이미 등록된 노드 ID로 addNode()하면 IllegalArgumentException을 던진다")
+    void addNodeWithDuplicateIdThrowsException() {
+        Flow flow = new Flow("flow-1");
+        flow.addNode(new RecordingNode("nodeA"));
+
+        assertThatThrownBy(() -> flow.addNode(new RecordingNode("nodeA")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("nodeA");
+    }
 }
