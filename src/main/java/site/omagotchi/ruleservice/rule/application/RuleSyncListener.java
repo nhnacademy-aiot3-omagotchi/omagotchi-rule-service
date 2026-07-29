@@ -14,7 +14,7 @@ import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 @Slf4j
 @Component
 public class RuleSyncListener {
-    public static final String RULE_UPDATED_EXCHANGE = "rule.updated.exchange";
+    public static final String RULE_UPDATED_EXCHANGE = "omagotchi.rule.updated.exchange";
 
     private final InMemoryRuleCache inMemoryRuleCache;
     private final Counter rejectCounter;

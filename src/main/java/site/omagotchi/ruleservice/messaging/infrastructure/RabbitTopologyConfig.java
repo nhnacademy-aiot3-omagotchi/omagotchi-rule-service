@@ -12,14 +12,14 @@ import org.springframework.context.annotation.Configuration;
 @Slf4j
 @Configuration
 public class RabbitTopologyConfig {
-    public static final String EXCHANGE_MAIN = "sensor.main.exchange";
-    public static final String EXCHANGE_DEAD_LETTER = "sensor.dead-letter.exchange";
-    public static final String EXCHANGE_UNROUTED = "sensor.unrouted.exchange";
+    public static final String EXCHANGE_MAIN = "omagotchi.sensor.main.exchange";
+    public static final String EXCHANGE_DEAD_LETTER = "omagotchi.sensor.dead-letter.exchange";
+    public static final String EXCHANGE_UNROUTED = "omagotchi.sensor.unrouted.exchange";
 
-    public static final String QUEUE_RAW = "sensor.raw.queue";
-    public static final String QUEUE_QUALITY = "sensor.quality.queue";
-    public static final String QUEUE_UNROUTED= "sensor.unrouted.queue";
-    public static final String QUEUE_DEAD_LETTER = "sensor.dead-letter.queue";
+    public static final String QUEUE_RAW = "omagotchi.sensor.raw.queue";
+    public static final String QUEUE_QUALITY = "omagotchi.sensor.quality.queue";
+    public static final String QUEUE_UNROUTED= "omagotchi.sensor.unrouted.queue";
+    public static final String QUEUE_DEAD_LETTER = "omagotchi.sensor.dead-letter.queue";
 
     //-------exchange------
     // 메세지 분배 역할
