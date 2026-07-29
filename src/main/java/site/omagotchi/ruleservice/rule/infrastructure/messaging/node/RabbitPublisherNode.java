@@ -5,7 +5,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.inbound.SensorReading;
-import site.omagotchi.ruleservice.rule.domain.QualityEvent;
+import site.omagotchi.ruleservice.quality.QualityEvent;
 import site.omagotchi.ruleservice.rule.infrastructure.messaging.PendingCorrelationData;
 import site.omagotchi.ruleservice.rule.infrastructure.messaging.PendingMessage;
 import site.omagotchi.ruleservice.rule.infrastructure.messaging.PublishRetryBuffer;
