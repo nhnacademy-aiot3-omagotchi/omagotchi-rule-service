@@ -44,7 +44,7 @@ public class DefaultOutputPort implements OutputPort {
     @Override
     public void send(Message message) {
 
-        for(int i = 0; i < this.connections.size(); i++) {
+        for (int i = 0; i < this.connections.size(); i++) {
             Connection connection = this.connections.get(i);
 
             try {
