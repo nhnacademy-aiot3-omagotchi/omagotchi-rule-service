@@ -1,9 +1,9 @@
 package site.omagotchi.ruleservice.flow.application;
 
 import lombok.Getter;
-import site.omagotchi.ruleservice.core.message.Message;
-import site.omagotchi.ruleservice.core.node.AbstractNode;
-import site.omagotchi.ruleservice.core.node.Reconfigurable;
+import site.omagotchi.ruleservice.flow.domain.Message;
+import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
+import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
 
 import java.util.Map;
 

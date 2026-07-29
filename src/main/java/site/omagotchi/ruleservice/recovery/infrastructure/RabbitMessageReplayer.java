@@ -1,11 +1,13 @@
 package site.omagotchi.ruleservice.recovery.infrastructure;
 
+import site.omagotchi.ruleservice.recovery.application.port.MessageReplayer;
+
 import com.rabbitmq.client.GetResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.recovery.domain.ParkingQueue;
-import site.omagotchi.ruleservice.rule.infrastructure.messaging.config.RabbitTopologyConfig;
+import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 
 import java.util.Map;
 import java.util.Objects;

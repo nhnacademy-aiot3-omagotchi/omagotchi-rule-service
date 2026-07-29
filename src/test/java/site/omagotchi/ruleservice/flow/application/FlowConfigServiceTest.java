@@ -6,10 +6,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.ruleservice.core.engine.FlowManager;
-import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
-import site.omagotchi.ruleservice.core.node.AbstractNode;
-import site.omagotchi.ruleservice.core.node.Reconfigurable;
+import site.omagotchi.ruleservice.flow.application.FlowManager;
+import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
+import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.Map;

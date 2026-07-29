@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
-import site.omagotchi.ruleservice.rule.infrastructure.cache.RuleCache;
+import site.omagotchi.ruleservice.rule.domain.RuleCache;
 
 import java.util.Collection;
 

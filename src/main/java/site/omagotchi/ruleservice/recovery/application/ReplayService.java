@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.omagotchi.ruleservice.recovery.domain.ParkingQueue;
 import site.omagotchi.ruleservice.recovery.domain.ReplayResult;
-import site.omagotchi.ruleservice.recovery.infrastructure.MessageReplayer;
+import site.omagotchi.ruleservice.recovery.application.port.MessageReplayer;
 
 /**
  * replay 유스케이스.

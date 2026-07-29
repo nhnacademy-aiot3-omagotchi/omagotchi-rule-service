@@ -30,5 +30,5 @@ core:
 
 #fixme
 sensor:
-  broker-url: ${SENSOR_BROKER_URL:tcp://localhost:1883}
-  client-id: ${SENSOR_CLIENT_ID:rule-engine-1}
+  broker-url: ${SENSOR_BROKER_URL}
+  client-id: ${SENSOR_CLIENT_ID}

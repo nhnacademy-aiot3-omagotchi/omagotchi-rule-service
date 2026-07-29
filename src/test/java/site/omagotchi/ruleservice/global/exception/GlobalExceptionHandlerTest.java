@@ -14,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
 
 import java.util.List;
 

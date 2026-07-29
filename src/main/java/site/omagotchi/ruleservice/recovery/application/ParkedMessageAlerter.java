@@ -6,7 +6,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import site.omagotchi.ruleservice.rule.infrastructure.messaging.config.RabbitTopologyConfig;
+import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 
 @Slf4j
 @Component
