@@ -12,7 +12,7 @@ import site.omagotchi.ruleservice.rule.infrastructure.cache.RuleCache;
 import java.util.Collection;
 
 @RestController
-@RequestMapping("/rules")
+@RequestMapping("/api/v1/rules")
 @RequiredArgsConstructor
 public class RuleController {
 

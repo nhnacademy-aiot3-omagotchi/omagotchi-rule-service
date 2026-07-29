@@ -17,7 +17,7 @@ public class RegistryConfig {
      * FlowParser, FlowManager가 이 NodeRegistry를 생성자 주입으로 받아 씀
      *
      * 등록 실패 시 기동 자체가 실패함
-     * registry.register(nodeDescriptor)에서 DuplicateNodeTypeException이 터지면 그 예외가 그대로 @Bean 메서드 밖으로 전파되고, Spring 이 컨텍스트를 못 띄움
+     * registry.register(nodeDescriptor)에서 IllegalStateException이 터지면 그 예외가 그대로 @Bean 메서드 밖으로 전파되고, Spring 이 컨텍스트를 못 띄움
      */
     @Bean
     public NodeRegistry nodeRegistry(List<NodeProvider> providers) {

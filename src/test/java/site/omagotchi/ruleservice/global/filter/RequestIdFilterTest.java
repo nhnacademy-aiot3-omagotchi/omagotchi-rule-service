@@ -57,7 +57,7 @@ class RequestIdFilterTest {
     }
 
     @Test
-    @DisplayName("X-Request-ID가 없으면 새로 UUID를 발급한다")
+    @DisplayName("X-Request-ID가 없으면 새로 발급한다")
     void generatesNewRequestIdWhenHeaderMissingTest() throws ServletException, IOException {
         when(request.getHeader(REQUEST_ID_HEADER)).thenReturn(null);
 
@@ -67,16 +67,25 @@ class RequestIdFilterTest {
     }
 
     @Test
-    @DisplayName("형식이 안전하지 않은 X-Request-ID는 신뢰하지 않고새로 발급한다")
-    void generatesNewRequestIdWhenHeaderIsUnsafeTest() throws ServletException, IOException {
-        String malformed = "line1\nline2";
-
-        when(request.getHeader(REQUEST_ID_HEADER)).thenReturn(malformed);
+    @DisplayName("헤더 값이 빈 문자열이면 새로 발급한다")
+    void generatesNewRequestIdWhenHeaderIsBlank() throws ServletException, IOException {
+        when(request.getHeader(REQUEST_ID_HEADER)).thenReturn("");
 
         requestIdFilter.doFilter(request, response, filterChain);
 
-        verify(response, never()).setHeader(REQUEST_ID_HEADER, malformed);
-        verify(response).setHeader(eq(REQUEST_ID_HEADER), argThat(id -> !id.equals(malformed)));
+        verify(response).setHeader(eq(REQUEST_ID_HEADER), argThat(id -> !id.isBlank()));
+    }
+
+    @Test
+    @DisplayName("형식이 이상해도 값이 있으면 그대로 이어받는다 (opaque 문자열 취급)")
+    void preservesIncomingRequestIdRegardlessOfFormat() throws ServletException, IOException {
+        String unusualButPresent = "line1\nline2";
+
+        when(request.getHeader(REQUEST_ID_HEADER)).thenReturn(unusualButPresent);
+
+        requestIdFilter.doFilter(request, response, filterChain);
+
+        verify(response).setHeader(REQUEST_ID_HEADER, unusualButPresent);
     }
 
     @Test
