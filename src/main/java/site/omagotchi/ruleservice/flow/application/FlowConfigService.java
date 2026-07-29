@@ -3,10 +3,10 @@ package site.omagotchi.ruleservice.flow.application;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import site.omagotchi.ruleservice.core.engine.FlowManager;
-import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
-import site.omagotchi.ruleservice.core.node.AbstractNode;
-import site.omagotchi.ruleservice.core.node.Reconfigurable;
+import site.omagotchi.ruleservice.flow.application.FlowManager;
+import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
+import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.Collections;

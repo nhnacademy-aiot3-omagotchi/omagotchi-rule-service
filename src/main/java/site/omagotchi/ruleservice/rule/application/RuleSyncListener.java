@@ -9,7 +9,7 @@ import org.springframework.amqp.rabbit.annotation.QueueBinding;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
-import site.omagotchi.ruleservice.rule.infrastructure.cache.impl.InMemoryRuleCache;
+import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.dto.RuleResponse;
 @Slf4j
 @Component

@@ -10,7 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import site.omagotchi.ruleservice.rule.domain.Operator;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
-import site.omagotchi.ruleservice.rule.infrastructure.cache.RuleCache;
+import site.omagotchi.ruleservice.rule.domain.RuleCache;
 
 import java.util.Collection;
 import java.util.List;

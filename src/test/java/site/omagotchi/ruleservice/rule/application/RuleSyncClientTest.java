@@ -9,7 +9,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
-import site.omagotchi.ruleservice.rule.infrastructure.cache.impl.InMemoryRuleCache;
+import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;

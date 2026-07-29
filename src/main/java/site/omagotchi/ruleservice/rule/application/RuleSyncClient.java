@@ -12,8 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.global.filter.RequestIdGenerator;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
-import site.omagotchi.ruleservice.rule.infrastructure.cache.RuleCache;
-import site.omagotchi.ruleservice.rule.infrastructure.cache.impl.InMemoryRuleCache;
+import site.omagotchi.ruleservice.rule.domain.RuleCache;
+import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.dto.RuleResponse;
 
 import java.util.ArrayList;

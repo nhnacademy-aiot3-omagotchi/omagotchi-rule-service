@@ -6,7 +6,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import io.micrometer.core.instrument.Gauge;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import site.omagotchi.ruleservice.rule.infrastructure.messaging.config.RabbitTopologyConfig;
+import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 
 @Configuration
 public class ParkingQueueMetricConfig {

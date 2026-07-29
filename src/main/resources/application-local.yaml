@@ -2,33 +2,8 @@ spring:
   config:
     # 확장자가 없는 .env를 Java properties 형식으로 읽음
     import: "optional:file:./.env[.properties]"
-  rabbitmq:
-    listener:
-      simple:
-        default-requeue-rejected: false
-        retry:
-          enabled: true
-          max-retries: 3
-          initial-interval: 1000ms
-          multiplier: 2
-          max-interval: 10000ms
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
-    publisher-confirm-type: correlated
-#    publisher-returns: true # routqueue를 만들지 않고 해당 옵션으로 콜백 메서드 처리도 되는듯
 
 eureka:
   client:
     # Discovery를 함께 실행할 때 .env에서 true로 변경
     enabled: ${EUREKA_ENABLED:false}
-
-# RestClientConfig에서 Core API
-core:
-  base-url: ${CORE_BASE_URL:temp} # Core 쪽 정해지면 그때 넣어야 함
-
-#fixme
-sensor:
-  broker-url: ${SENSOR_BROKER_URL:tcp://localhost:1883}
-  client-id: ${SENSOR_CLIENT_ID:rule-engine-1}

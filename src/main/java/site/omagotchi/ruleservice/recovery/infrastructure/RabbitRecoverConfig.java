@@ -7,7 +7,7 @@ import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.rabbit.retry.RepublishMessageRecoverer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import site.omagotchi.ruleservice.rule.infrastructure.messaging.config.RabbitTopologyConfig;
+import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 
 /**
  * 재시도 3회 후 <code>dlx -> dlq</code>로 보내는 과정. <br/>

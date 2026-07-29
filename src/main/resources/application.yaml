@@ -4,6 +4,29 @@ server:
 spring:
   application:
     name: rule-service
+  rabbitmq:
+    # 아래 listener/publisher 설정은 환경 설정이 아니라 앱 동작의 전제조건이라 base에 둠
+    # - default-requeue-rejected=false: poison 메시지가 재큐잉되지 않고 DLQ(파킹 큐)로 가는 조건
+    # - publisher-confirm-type=correlated: PublishRetryBuffer의 발행 확인 콜백이 동작하는 조건
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 3
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+#    publisher-returns: true # routqueue를 만들지 않고 해당 옵션으로 콜백 메서드 처리도 되는듯
+
+# RestClientConfig에서 Core API
+core:
+  base-url: ${CORE_BASE_URL:temp} # Core 쪽 정해지면 그때 넣어야 함
 
 eureka:
   client:

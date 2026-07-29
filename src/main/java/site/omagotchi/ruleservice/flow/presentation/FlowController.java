@@ -4,8 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import site.omagotchi.ruleservice.core.engine.FlowManager;
-import site.omagotchi.ruleservice.core.engine.dto.FlowSummary;
+import site.omagotchi.ruleservice.flow.application.FlowManager;
+import site.omagotchi.ruleservice.flow.presentation.dto.FlowSummary;
 import site.omagotchi.ruleservice.flow.application.FlowConfigService;
 
 import java.util.List;
