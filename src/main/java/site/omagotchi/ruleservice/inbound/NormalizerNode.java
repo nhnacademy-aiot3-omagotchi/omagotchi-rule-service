@@ -3,6 +3,7 @@ package site.omagotchi.ruleservice.inbound;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.quality.LastSeenRegistry;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
 
+@Slf4j
 public class NormalizerNode extends AbstractNode {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final LastSeenRegistry lastSeenRegistry;
@@ -37,6 +39,7 @@ public class NormalizerNode extends AbstractNode {
 
         if (topicSegments[0].equals("iot")){
             if (topicSegments.length < 6) {
+                log.warn("[무효] iot 토픽 세그먼트 부족 (기대 6, 실제 {}): {}", topicSegments.length, topic);
                 QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"iot 토픽 세그먼트 부족: " + topic);
                 send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
@@ -48,6 +51,7 @@ public class NormalizerNode extends AbstractNode {
 
         } else if (topicSegments[0].equals("modbus")) {
             if (topicSegments.length < 2) {
+                log.warn("[무효] modbus 토픽 세그먼트 부족 (기대 2, 실제 {}): {}", topicSegments.length, topic);
                 QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"modbus 토픽 세그먼트 부족: " + topic);
                 send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
@@ -58,6 +62,7 @@ public class NormalizerNode extends AbstractNode {
             measurement = topicSegments[1];
 
         } else {
+            log.warn("[무효] 알 수 없는 토픽 형식: {}", topic);
             QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"알 수 없는 토픽 형식: " + topic);
             send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
             return;
@@ -78,6 +83,7 @@ public class NormalizerNode extends AbstractNode {
             boolean timeSubstituted = false;
 
             if (node.get("value") == null) {
+                log.warn("[무효] value 누락: topic={}", topic);
                 QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"value: 누락");
                 send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
@@ -106,6 +112,7 @@ public class NormalizerNode extends AbstractNode {
 
             send("out",Message.of(message.getTraceId(), Map.of("sensorReading",sensorReading, "_timeSubstituted",timeSubstituted)));
         } catch (JsonProcessingException | DateTimeParseException e) {
+            log.warn("[무효] payload 파싱 실패: topic={}, raw={}", topic, raw, e);
             QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"payload 파싱 실패: " + e.getMessage());
             send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
         }

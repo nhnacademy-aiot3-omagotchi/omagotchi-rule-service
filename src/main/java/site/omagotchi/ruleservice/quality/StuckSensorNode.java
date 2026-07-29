@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.quality;
 
+import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.inbound.SensorReading;
@@ -9,6 +10,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 public class StuckSensorNode extends AbstractNode {
 
     private static final Duration STUCK_THRESHOLD = Duration.ofMinutes(30);
@@ -61,6 +63,9 @@ public class StuckSensorNode extends AbstractNode {
         boolean shouldAlert = stuckState.lastAlertedAt() == null
                 || Duration.between(stuckState.lastAlertedAt(), now).compareTo(RE_ALERT_INTERVAL) > 0;
         if(stuckDuration.compareTo(STUCK_THRESHOLD) > 0 && shouldAlert){
+            log.info("[무변동] {}:{} {}분",
+                    sensorReading.deviceEui(), sensorReading.measurement(), stuckDuration.toMinutes());
+
             QualityEvent qualityEvent = QualityEvent.from(sensorReading, QualityEvent.Type.STUCK,"무변동: "+ stuckDuration.toMinutes() + "분");
             send("stuck",Message.of(sensorReading.traceId(), Map.of("qualityEvent",qualityEvent)));
             stateMap.put(key,new StuckState(value,stuckState.since(),now));
