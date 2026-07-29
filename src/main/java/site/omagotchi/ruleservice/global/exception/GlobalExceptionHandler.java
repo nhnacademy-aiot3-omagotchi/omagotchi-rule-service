@@ -9,7 +9,6 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
 
 import java.util.Objects;
 
@@ -24,7 +23,7 @@ public class GlobalExceptionHandler {
             BusinessException exception,
             HttpServletRequest request
     ) {
-        return response(exception.getErrorCode(), request);
+        return response(exception.getErrorCode(), exception.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -51,20 +50,6 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return response(CommonErrorCode.MALFORMED_REQUEST, request);
-    }
-
-    @ExceptionHandler(FlowManagerException.class)
-    public ResponseEntity<ApiErrorResponse> handleFlowManagerException(
-            FlowManagerException exception,
-            HttpServletRequest request
-    ) {
-        if (Objects.isNull(exception.getFlowErrorCode())) {
-            // FlowErrorCode 없이 던져진 기존 경로(예: 노드 id 불일치) -> 500으로 처리
-            log.error("[{}] FlowErrorCode 없는 FlowManagerException 발생", request.getRequestURI(), exception);
-            return response(CommonErrorCode.INTERNAL_ERROR, request);
-        }
-
-        return response(exception.getFlowErrorCode(), request);
     }
 
     // 처리되지 않은 예외가 Spring 기본 에러 응답으로 새는 것을 막는 fallback

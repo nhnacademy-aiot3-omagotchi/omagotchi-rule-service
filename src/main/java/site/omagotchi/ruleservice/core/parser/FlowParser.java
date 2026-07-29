@@ -6,9 +6,9 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.FlowDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.NodeDefinition;
-import site.omagotchi.ruleservice.core.parser.exception.FlowParserException;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -35,7 +35,7 @@ public class FlowParser {
             String json = Files.readString(path);
             return this.parse(json);
         } catch (IOException e) {
-            throw new FlowParserException("플로우 정의 파일을 읽을 수 없습니다: " + path, e);
+            throw new UncheckedIOException("플로우 정의 파일을 읽을 수 없습니다: " + path, e);
         }
     }
 
@@ -48,9 +48,9 @@ public class FlowParser {
             Throwable rootCause = this.getRootCause(e);
 
             if (rootCause instanceof IllegalArgumentException) {
-                throw new FlowParserException("플로우 정의의 필수 필드가 누락되었거나 유효하지 않습니다: " + rootCause.getMessage(), rootCause);
+                throw new IllegalArgumentException("플로우 정의의 필수 필드가 누락되었거나 유효하지 않습니다: " + rootCause.getMessage(), rootCause);
             }
-            throw new FlowParserException("플로우 정의 JSON을 파싱할 수 없습니다: " + e.getMessage(), e);
+            throw new IllegalArgumentException("플로우 정의 JSON을 파싱할 수 없습니다: " + e.getMessage(), e);
         }
     }
 
@@ -79,7 +79,7 @@ public class FlowParser {
 
         for (NodeDefinition nodeDef : flowDef.nodes()) {
             if (!seen.add(nodeDef.id())) {
-                throw new FlowParserException("[flow = %s] 중복된 노드 ID입니다: %s"
+                throw new IllegalArgumentException("[flow = %s] 중복된 노드 ID입니다: %s"
                         .formatted(flowDef.id(), nodeDef.id()));
             }
         }
@@ -95,13 +95,13 @@ public class FlowParser {
         for (ConnectionDefinition connectionDef : flowDef.connections()) {
             String sourceNodeId = connectionDef.sourceNodeId();
             if (!nodeIds.contains(sourceNodeId)) {
-                throw new FlowParserException("[flow = %s] 연결이 존재하지 않는 소스 노드를 참조합니다: %s (from = %s)"
+                throw new IllegalArgumentException("[flow = %s] 연결이 존재하지 않는 소스 노드를 참조합니다: %s (from = %s)"
                         .formatted(flowDef.id(), sourceNodeId, connectionDef.from()));
             }
 
             String targetNodeId = connectionDef.targetNodeId();
             if (!nodeIds.contains(targetNodeId)) {
-                throw new FlowParserException("[flow = %s] 연결이 존재하지 않는 대상 노드를 참조합니다: %s (to = %s)"
+                throw new IllegalArgumentException("[flow = %s] 연결이 존재하지 않는 대상 노드를 참조합니다: %s (to = %s)"
                         .formatted(flowDef.id(), targetNodeId, connectionDef.to()));
             }
         }
@@ -135,7 +135,7 @@ public class FlowParser {
 
             if (neighborState == VisitState.VISITING) {
                 path.add(neighborId);
-                throw new FlowParserException("[flow = %s] 순환 참조가 발견되었습니다: %s"
+                throw new IllegalArgumentException("[flow = %s] 순환 참조가 발견되었습니다: %s"
                         .formatted(flowId, String.join(" -> ", path)));
             }
 

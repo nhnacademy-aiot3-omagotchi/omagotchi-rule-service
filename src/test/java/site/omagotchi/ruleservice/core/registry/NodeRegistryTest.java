@@ -5,8 +5,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
-import site.omagotchi.ruleservice.core.registry.exception.DuplicateNodeTypeException;
-import site.omagotchi.ruleservice.core.registry.exception.UnknownNodeTypeException;
 
 import java.util.Map;
 import java.util.Set;
@@ -43,12 +41,12 @@ class NodeRegistryTest {
         }
 
         @Test
-        @DisplayName("이미 등록된 타입을 다시 등록하면 DuplicateNodeTypeException을 던진다")
+        @DisplayName("이미 등록된 타입을 다시 등록하면 IllegalStateException을 던진다")
         void duplicateTypeThrowsException() {
             nodeRegistry.register(descriptorOf("SampleSource"));
 
             assertThatThrownBy(() -> nodeRegistry.register(descriptorOf("SampleSource")))
-                    .isInstanceOf(DuplicateNodeTypeException.class)
+                    .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("SampleSource");
         }
 
@@ -101,10 +99,10 @@ class NodeRegistryTest {
         }
 
         @Test
-        @DisplayName("등록되지 않은 타입으로 생성하면 UnknownNodeTypeException을 던진다")
+        @DisplayName("등록되지 않은 타입으로 생성하면 IllegalArgumentException을 던진다")
         void unknownTypeThrowsException() {
             assertThatThrownBy(() -> nodeRegistry.create("Ghost", Map.of()))
-                    .isInstanceOf(UnknownNodeTypeException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Ghost");
         }
 
@@ -115,7 +113,7 @@ class NodeRegistryTest {
             nodeRegistry.register(descriptorOf("SampleSink"));
 
             assertThatThrownBy(() -> nodeRegistry.create("Ghost", Map.of()))
-                    .isInstanceOf(UnknownNodeTypeException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("SampleSource")
                     .hasMessageContaining("SampleSink");
         }

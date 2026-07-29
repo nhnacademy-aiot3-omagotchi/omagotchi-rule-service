@@ -10,11 +10,16 @@ spring:
     publisher-confirm-type: correlated
 #    publisher-returns: true
 
-
 eureka:
   client:
     # Discovery를 함께 실행할 때 .env에서 true로 변경
     enabled: ${EUREKA_ENABLED:false}
 
+# RestClientConfig에서 Core API
 core:
-  base-url: "temp"
+  base-url: ${CORE_BASE_URL:temp} # Core 쪽 정해지면 그때 넣어야 함
+
+#fixme
+sensor:
+  broker-url: ${SENSOR_BROKER_URL:tcp://localhost:1883}
+  client-id: ${SENSOR_CLIENT_ID:rule-engine-1}

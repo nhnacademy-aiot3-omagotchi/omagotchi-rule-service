@@ -8,14 +8,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.ruleservice.core.engine.exception.FlowManagerException;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.parser.definition.ConnectionDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.FlowDefinition;
 import site.omagotchi.ruleservice.core.parser.definition.NodeDefinition;
 import site.omagotchi.ruleservice.core.registry.NodeRegistry;
+import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -105,7 +106,7 @@ class FlowManagerTest {
         }
 
         @Test
-        @DisplayName("이미 배포된 flowId를 다시 배포하면 FlowManagerException을 던진다")
+        @DisplayName("이미 배포된 flowId를 다시 배포하면 BusinessException을 던진다")
         void duplicateDeployThrowsException() {
             FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
             AbstractNode node = mockNode("nodeA");
@@ -114,7 +115,7 @@ class FlowManagerTest {
             flowManager.deploy(flowDef);
 
             assertThatThrownBy(() -> flowManager.deploy(flowDef))
-                    .isInstanceOf(FlowManagerException.class)
+                    .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("이미 배포된 플로우");
 
             // 중복 배포 시도는 flowEngine에 두 번째 register가 일어나지 않아야 한다
@@ -122,14 +123,14 @@ class FlowManagerTest {
         }
 
         @Test
-        @DisplayName("NodeFactory가 반환한 노드의 id가 정의된 id와 다르면 FlowManagerException을 던지고 생성된 노드는 shutdown된다")
+        @DisplayName("NodeFactory가 반환한 노드의 id가 정의된 id와 다르면 IllegalStateException을 던지고 생성된 노드는 shutdown된다")
         void mismatchedNodeIdThrowsExceptionAndShutsDownCreatedNode() {
             FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
             AbstractNode wrongIdNode = mockNode("WRONG_ID");
             when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(wrongIdNode);
 
             assertThatThrownBy(() -> flowManager.deploy(flowDef))
-                    .isInstanceOf(FlowManagerException.class)
+                    .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("일치하지 않습니다");
 
             verify(wrongIdNode).shutdown();
@@ -205,7 +206,7 @@ class FlowManagerTest {
             verify(flowEngine).unregister("flow-1");
             assertThat(flowManager.list()).isEmpty();
             assertThatThrownBy(() -> flowManager.getStatus("flow-1"))
-                    .isInstanceOf(FlowManagerException.class);
+                    .isInstanceOf(BusinessException.class);
         }
     }
 
@@ -214,20 +215,20 @@ class FlowManagerTest {
     class StartStopRestart {
 
         @Test
-        @DisplayName("등록되지 않은 flowId로 start()를 호출하면 FlowManagerException을 던진다")
+        @DisplayName("등록되지 않은 flowId로 start()를 호출하면 BusinessException을 던진다")
         void startUnregisteredFlowThrowsException() {
             assertThatThrownBy(() -> flowManager.start("ghost"))
-                    .isInstanceOf(FlowManagerException.class)
+                    .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("등록되지 않은 플로우");
 
             verify(flowEngine, never()).start(any());
         }
 
         @Test
-        @DisplayName("등록되지 않은 flowId로 stop()을 호출하면 FlowManagerException을 던진다")
+        @DisplayName("등록되지 않은 flowId로 stop()을 호출하면 BusinessException을 던진다")
         void stopUnregisteredFlowThrowsException() {
             assertThatThrownBy(() -> flowManager.stop("ghost"))
-                    .isInstanceOf(FlowManagerException.class);
+                    .isInstanceOf(BusinessException.class);
 
             verify(flowEngine, never()).stop(any());
         }
@@ -284,10 +285,10 @@ class FlowManagerTest {
         }
 
         @Test
-        @DisplayName("등록되지 않은 flowId로 remove()를 호출하면 FlowManagerException을 던진다")
+        @DisplayName("등록되지 않은 flowId로 remove()를 호출하면 BusinessException을 던진다")
         void removeUnregisteredFlowThrowsException() {
             assertThatThrownBy(() -> flowManager.remove("ghost"))
-                    .isInstanceOf(FlowManagerException.class);
+                    .isInstanceOf(BusinessException.class);
 
             verify(flowEngine, never()).unregister(any());
         }
@@ -304,10 +305,89 @@ class FlowManagerTest {
         }
 
         @Test
-        @DisplayName("등록되지 않은 flowId로 getStatus()를 호출하면 FlowManagerException을 던진다")
+        @DisplayName("등록되지 않은 flowId로 getStatus()를 호출하면 BusinessException을 던진다")
         void getStatusForUnregisteredFlowThrowsException() {
             assertThatThrownBy(() -> flowManager.getStatus("ghost"))
-                    .isInstanceOf(FlowManagerException.class);
+                    .isInstanceOf(BusinessException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("getNode / getNodeConfig")
+    class GetNodeAndGetNodeConfig {
+
+        @Test
+        @DisplayName("존재하는 노드를 조회하면 flowEngine이 반환한 노드 인스턴스를 그대로 돌려준다")
+        void getNodeReturnsNodeFromFlowEngineTest() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+
+            flowManager.deploy(flowDef);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(node);
+
+            AbstractNode result = flowManager.getNode("flow-1", "nodeA");
+
+            assertThat(result).isSameAs(node);
+        }
+
+        @Test
+        @DisplayName("등록되지 않은 flowId로 getNode()를 호출하면 BusinessException을 던진다")
+        void getNodeForUnregisteredFlowThrowsException() {
+            assertThatThrownBy(() -> flowManager.getNode("ghost", "nodeA"))
+                    .isInstanceOf(BusinessException.class);
+
+            verify(flowEngine, never()).getNode(any(), any());
+        }
+
+        @Test
+        @DisplayName("존재하는 플로우인데 없는 노드면 BusinessException을 던진다")
+        void getNodeForMissingNodeThrowsBusinessException() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+            when(flowEngine.getNode("flow-1", "ghost-node")).thenReturn(null);
+
+            assertThatThrownBy(() -> flowManager.getNode("flow-1", "ghost-node"))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("정적 정의의 config를 그대로 조회한다")
+        void getNodeConfigReturnsStaticDefinitionConfig() {
+            Map<String, Object> config = Map.of("min", 300, "max", 5000);
+            FlowDefinition flowDef = new FlowDefinition(
+                    "flow-1", null, null,
+                    List.of(new NodeDefinition("nodeA", "SampleSource", config)),
+                    null
+            );
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            Map<String, Object> result = flowManager.getNodeConfig("flow-1", "nodeA");
+
+            assertThat(result).containsExactlyInAnyOrderEntriesOf(config);
+        }
+
+        @Test
+        @DisplayName("등록되지 않은 flowId로 getNodeConfig()를 호출하면 BusinessException을 던진다")
+        void getNodeConfigForUnregisteredFlowThrowsException() {
+            assertThatThrownBy(() -> flowManager.getNodeConfig("ghost", "nodeA"))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("존재하는 플로우인데 없는 노드면 getNodeConfig()도 BusinessException을 던진다")
+        void getNodeConfigForMissingNodeThrowsBusinessException() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            assertThatThrownBy(() -> flowManager.getNodeConfig("flow-1", "ghost-node"))
+                    .isInstanceOf(BusinessException.class);
         }
     }
 }
