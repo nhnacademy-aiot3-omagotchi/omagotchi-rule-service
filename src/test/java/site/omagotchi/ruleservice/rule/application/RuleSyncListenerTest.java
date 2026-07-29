@@ -17,7 +17,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.utility.DockerImageName;
 import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
-import site.omagotchi.ruleservice.rule.infrastructure.dto.RuleResponse;
+import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 

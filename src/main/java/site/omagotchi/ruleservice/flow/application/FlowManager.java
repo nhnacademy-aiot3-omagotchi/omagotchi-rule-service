@@ -5,7 +5,7 @@ import site.omagotchi.ruleservice.flow.domain.FlowState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import site.omagotchi.ruleservice.flow.presentation.dto.FlowSummary;
+import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
 import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
 import site.omagotchi.ruleservice.flow.domain.Flow;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;

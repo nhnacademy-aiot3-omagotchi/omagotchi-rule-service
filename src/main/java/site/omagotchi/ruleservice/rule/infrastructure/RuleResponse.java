@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.rule.infrastructure.dto;
+package site.omagotchi.ruleservice.rule.infrastructure;
 
 import site.omagotchi.ruleservice.rule.domain.Operator;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;

@@ -14,7 +14,7 @@ import site.omagotchi.ruleservice.global.filter.RequestIdGenerator;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.domain.RuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
-import site.omagotchi.ruleservice.rule.infrastructure.dto.RuleResponse;
+import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 
 import java.util.ArrayList;
 import java.util.List;
