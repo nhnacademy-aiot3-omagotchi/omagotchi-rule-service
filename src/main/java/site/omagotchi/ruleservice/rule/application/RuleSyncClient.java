@@ -10,15 +10,15 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import site.omagotchi.ruleservice.global.filter.RequestIdGenerator;
+import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.infrastructure.cache.RuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.cache.impl.InMemoryRuleCache;
-import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.infrastructure.dto.RuleResponse;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -70,7 +70,7 @@ public class RuleSyncClient {
         long backOff = 5;
         while (state.get() == SyncState.COLD) {
             // 스케줄러성 호출 - 기존 요청 컨텍스트가 없으므로 이 시도 하나를 위한 request id를 직접 발급
-            MDC.put(MDC_REQUEST_ID_KEY, UUID.randomUUID().toString());
+            MDC.put(MDC_REQUEST_ID_KEY, RequestIdGenerator.generate());
 
             try {
                 List<ThresholdRule> rules = fetchAll();
@@ -104,7 +104,7 @@ public class RuleSyncClient {
             return;
         }
 
-        MDC.put(MDC_REQUEST_ID_KEY, UUID.randomUUID().toString());
+        MDC.put(MDC_REQUEST_ID_KEY, RequestIdGenerator.generate());
 
         try {
             List<ThresholdRule> rules = fetchAll();

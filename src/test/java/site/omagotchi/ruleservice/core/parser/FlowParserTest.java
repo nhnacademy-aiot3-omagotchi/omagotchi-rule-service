@@ -6,8 +6,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import site.omagotchi.ruleservice.core.parser.definition.FlowDefinition;
-import site.omagotchi.ruleservice.core.parser.exception.FlowParserException;
 
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -91,12 +91,12 @@ class FlowParserTest {
     class ParseFailure {
 
         @Test
-        @DisplayName("깨진 JSON은 FlowParserException을 던진다")
-        void malformedJsonThrowsFlowParserException() {
+        @DisplayName("깨진 JSON은 IllegalArgumentException을 던진다")
+        void malformedJsonThrowsIllegalArgumentException() {
             String json = "{ not valid json";
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -111,7 +111,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("필수 필드");
         }
 
@@ -126,7 +126,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -148,7 +148,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("중복된 노드 ID")
                     .hasMessageContaining("nodeA");
         }
@@ -174,7 +174,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("존재하지 않는 소스 노드")
                     .hasMessageContaining("ghost");
         }
@@ -195,7 +195,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("존재하지 않는 대상 노드")
                     .hasMessageContaining("ghost");
         }
@@ -223,7 +223,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("순환 참조");
         }
 
@@ -247,7 +247,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("순환 참조");
         }
 
@@ -267,7 +267,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("순환 참조");
         }
 
@@ -320,7 +320,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("중복된 노드 ID");
         }
 
@@ -343,7 +343,7 @@ class FlowParserTest {
                     """;
 
             assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("존재하지 않는");
         }
     }
@@ -353,12 +353,12 @@ class FlowParserTest {
     class ParseFromPath {
 
         @Test
-        @DisplayName("존재하지 않는 경로는 FlowParserException을 던진다")
-        void nonExistentPathThrowsFlowParserException() {
+        @DisplayName("존재하지 않는 경로는 UncheckedIOException을 던진다")
+        void nonExistentPathThrowsUncheckedIOException() {
             Path path = Path.of("/no/such/file.json");
 
             assertThatThrownBy(() -> flowParser.parse(path))
-                    .isInstanceOf(FlowParserException.class)
+                    .isInstanceOf(UncheckedIOException.class)
                     .hasMessageContaining("읽을 수 없습니다");
         }
     }

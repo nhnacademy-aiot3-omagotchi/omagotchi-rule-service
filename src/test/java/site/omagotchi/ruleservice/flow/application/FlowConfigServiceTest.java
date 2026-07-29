@@ -7,11 +7,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.ruleservice.core.engine.FlowManager;
-import site.omagotchi.ruleservice.core.engine.exception.NodeConfigRejectedException;
-import site.omagotchi.ruleservice.core.engine.exception.NodeNotFoundException;
-import site.omagotchi.ruleservice.core.engine.exception.NodeNotReconfigurableException;
+import site.omagotchi.ruleservice.core.engine.exception.FlowErrorCode;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.core.node.Reconfigurable;
+import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.Map;
 
@@ -36,24 +35,24 @@ class FlowConfigServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 노드면 FlowManager가 던진 NodeNotFoundException이 그대로 전파된다")
+    @DisplayName("존재하지 않는 노드면 FlowManager가 던진 BusinessException이 그대로 전파된다")
     void nodeNotFoundPropagatesTest() {
 
-        when(flowManager.getNode(FLOW_ID, NODE_ID)).thenThrow(new NodeNotFoundException(FLOW_ID, NODE_ID));
+        when(flowManager.getNode(FLOW_ID, NODE_ID)).thenThrow(new BusinessException(FlowErrorCode.NODE_NOT_FOUND, "flowId = %s, nodeId = %s".formatted(FLOW_ID, NODE_ID)));
 
         assertThatThrownBy(() -> flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 10)))
-                .isInstanceOf(NodeNotFoundException.class);
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
-    @DisplayName("Reconfigurable을 구현하지 않은 노드면 NodeNotReconfigurableException을 던진다")
+    @DisplayName("Reconfigurable을 구현하지 않은 노드면 BusinessException을 던진다")
     void nodeReconfigurableNodeThrowsTest() {
 
         AbstractNode plainNode = mock(AbstractNode.class);
         when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(plainNode);
 
         assertThatThrownBy(() -> flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 10)))
-                .isInstanceOf(NodeNotReconfigurableException.class);
+                .isInstanceOf(BusinessException.class);
 
         verify(flowManager, never()).getNodeConfig(any(), any());
     }
@@ -86,7 +85,7 @@ class FlowConfigServiceTest {
     }
 
     @Test
-    @DisplayName("reconfigure 실패 시 NodeConfigRejectedException으로 감싸서 던지고, 노드는 이전 값으로 원복된다.")
+    @DisplayName("reconfigure 실패 시 BusinessException으로 감싸서 던지고, 노드는 이전 값으로 원복된다.")
     void restoresPreviousConfigOnFailureTest() {
 
         FakeReconfigurableNode node = new FakeReconfigurableNode(NODE_ID, 100);
@@ -95,7 +94,7 @@ class FlowConfigServiceTest {
 
         assertThatThrownBy(() ->
                 flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", -1))) // 0 이상의 정수여야 함 (FakeReconfigurableNode의 정책)
-                .isInstanceOf(NodeConfigRejectedException.class);
+                .isInstanceOf(BusinessException.class);
 
         assertThat(node.getThreshold()).isEqualTo(100);
     }
@@ -112,14 +111,14 @@ class FlowConfigServiceTest {
 
         assertThatThrownBy(() ->
                 flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", -1))) // 실패
-                .isInstanceOf(NodeConfigRejectedException.class);
+                .isInstanceOf(BusinessException.class);
 
         // 정적 원본(100)이 아니라 직전 성공값(200)으로 돌아가야 함
         assertThat(node.getThreshold()).isEqualTo(200);
     }
 
     @Test
-    @DisplayName("원복 시도 자체도 실패해도 원래 예외(NodeConfigRejectedException)는 그대로 던져진다")
+    @DisplayName("원복 시도 자체도 실패해도 원래 예외(BusinessException)는 그대로 던져진다")
     void restoreFailureStillThrowsOriginalRejectionTest() {
 
         AbstractNode brokenNode = mock(AbstractNode.class,
@@ -132,6 +131,6 @@ class FlowConfigServiceTest {
 
         assertThatThrownBy(() ->
                 flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 200)))
-                .isInstanceOf(NodeConfigRejectedException.class);
+                .isInstanceOf(BusinessException.class);
     }
 }

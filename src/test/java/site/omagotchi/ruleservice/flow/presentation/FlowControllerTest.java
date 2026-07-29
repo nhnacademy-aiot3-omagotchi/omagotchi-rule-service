@@ -39,7 +39,7 @@ class FlowControllerTest {
     }
 
     @Test
-    @DisplayName("GET /flows는 FlowManager.listSummaries() 결과를 200으로 리턴한다")
+    @DisplayName("GET /api/v1/flows는 FlowManager.listSummaries() 결과를 200으로 리턴한다")
     void getFlowListReturnsSummariesTest() {
         List<FlowSummary> summaries = List.of(new FlowSummary(FLOW_ID, FlowState.RUNNING, List.of("nodeA")));
         when(flowManager.listSummaries()).thenReturn(summaries);
@@ -51,7 +51,7 @@ class FlowControllerTest {
     }
 
     @Test
-    @DisplayName("GET /flows/{flowId}는 FlowManager.getSummary() 결과를 200으로 리턴한다")
+    @DisplayName("GET /api/v1/flows/{flow-id}는 FlowManager.getSummary() 결과를 200으로 리턴한다")
     void getFlowReturnsSummaryTest() {
         FlowSummary flowSummary = new FlowSummary(FLOW_ID, FlowState.RUNNING, List.of("nodeA"));
         when(flowManager.getSummary(FLOW_ID)).thenReturn(flowSummary);
@@ -63,7 +63,7 @@ class FlowControllerTest {
     }
 
     @Test
-    @DisplayName("POST /flows/{flowId}/start는 FlowManager.start()를 호출하고 최신 상태를 반환한다")
+    @DisplayName("POST /api/v1/flows/{flow-id}/start는 FlowManager.start()를 호출하고 최신 상태를 반환한다")
     void startCallsFlowManagerAndReturnSummaryTest() {
         FlowSummary summary = new FlowSummary(FLOW_ID, FlowState.RUNNING, List.of("nodeA"));
         when(flowManager.getSummary(FLOW_ID)).thenReturn(summary);
@@ -76,7 +76,7 @@ class FlowControllerTest {
     }
 
     @Test
-    @DisplayName("POST /flows/{flowId}/stop은 FlowManager.stop()을 호출하고 최신 상태를 반환한다")
+    @DisplayName("POST /api/v1/flows/{flow-id}/stop은 FlowManager.stop()을 호출하고 최신 상태를 반환한다")
     void stopCallsFlowManagerAndReturnsSummaryTest() {
         FlowSummary summary = new FlowSummary(FLOW_ID, FlowState.STOPPED, List.of("nodeA"));
         when(flowManager.getSummary(FLOW_ID)).thenReturn(summary);
@@ -89,7 +89,7 @@ class FlowControllerTest {
     }
 
     @Test
-    @DisplayName("POST /flows/{flowId}/restart는 FlowManager.restart()를 호출하고 최신 상태를 반환한다")
+    @DisplayName("POST /api/v1/flows/{flow-id}/restart는 FlowManager.restart()를 호출하고 최신 상태를 반환한다")
     void restartCallsFlowManagerAndReturnsSummaryTest() {
         FlowSummary summary = new FlowSummary(FLOW_ID, FlowState.RUNNING, List.of("nodeA"));
         when(flowManager.getSummary(FLOW_ID)).thenReturn(summary);
@@ -102,7 +102,7 @@ class FlowControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /flows/{flowId}/nodes/{nodeId}/config는 FlowConfigService.reconfigure()를 호출하고 204를 리턴한다.")
+    @DisplayName("PATCH /api/v1/flows/{flow-id}/nodes/{node-id}/config는 FlowConfigService.reconfigure()를 호출하고 204를 리턴한다.")
     void reconfigureCallsFlowConfigServiceAndReturnsNoContentTest() {
         Map<String, Object> config = Map.of("threshold", 200);
 
