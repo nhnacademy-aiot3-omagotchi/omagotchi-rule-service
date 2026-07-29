@@ -21,9 +21,12 @@ public class MissingDetectorNode extends AbstractNode {
     private final QualityProperties qualityProperties;
 
     private ScheduledExecutorService scheduledExecutorService;
+    private Instant startedAt;
+
     private final Set<String> missingSensors = ConcurrentHashMap.newKeySet();   //결측 센서 목록
-    private static final Duration CHECK_INTERVAL = Duration.ofSeconds(30);      //검사 주기
+    private static final Duration CHECK_INTERVAL = Duration.ofSeconds(5);      //검사 주기
     private static final int MISSING_MULTIPLIER = 3;                            //판정 배수
+    private static final int DEFAULT_INTERVAL_SECONDS = 60;                     //기본 센서 측정 주기
 
     public MissingDetectorNode(String id, LastSeenRegistry lastSeenRegistry, QualityProperties qualityProperties) {
         super(id);
@@ -35,10 +38,10 @@ public class MissingDetectorNode extends AbstractNode {
     @Override
     public void initialize() {
         scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        startedAt = Instant.now();
 
         long interval = CHECK_INTERVAL.toSeconds();
-        long initialDelay = interval * MISSING_MULTIPLIER;
-        scheduledExecutorService.scheduleAtFixedRate(this::check, initialDelay, interval, TimeUnit.SECONDS);
+        scheduledExecutorService.scheduleAtFixedRate(this::check, interval, interval, TimeUnit.SECONDS);
         super.initialize();
     }
 
@@ -55,9 +58,8 @@ public class MissingDetectorNode extends AbstractNode {
 
     }
 
-    private void check() {
+    void check() {                                  //테스트에서 직접 호출하기 위해 package-private
         Instant now = Instant.now();
-        Duration threshold = CHECK_INTERVAL.multipliedBy(MISSING_MULTIPLIER);
 
         for (QualityProperties.SensorId sensor : qualityProperties.inventory()) {
 
@@ -65,12 +67,18 @@ public class MissingDetectorNode extends AbstractNode {
             String measurement = sensor.measurement();
             Optional<Instant> lastSeen = lastSeenRegistry.lastSeenAt(deviceEui, measurement);
             boolean isMissing;
+            int intervalSeconds = sensor.expectedIntervalSeconds() != null ? sensor.expectedIntervalSeconds() : DEFAULT_INTERVAL_SECONDS;
+            Duration threshold = Duration.ofSeconds(intervalSeconds).multipliedBy(MISSING_MULTIPLIER);
+
+            if (lastSeen.isEmpty() && Duration.between(startedAt,now).compareTo(threshold) < 0){
+                continue;
+            }
 
             if (lastSeen.isEmpty()) {
                 isMissing = true;   // 한 번도 안 옴 → 결측
             } else {
                 Duration sinceLastSeen = Duration.between(lastSeen.get(), now);
-                isMissing = sinceLastSeen.compareTo(threshold) > 0;   // 90초 넘게 안 옴 → 결측
+                isMissing = sinceLastSeen.compareTo(threshold) > 0;   // 임계값 넘게 안 옴 → 결측
             }
 
             String key = deviceEui + ":" + measurement;

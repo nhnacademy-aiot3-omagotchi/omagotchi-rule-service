@@ -2,6 +2,7 @@ package site.omagotchi.ruleservice.quality;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.inbound.SensorReading;
@@ -9,6 +10,7 @@ import site.omagotchi.ruleservice.inbound.SensorReading;
 import java.time.Duration;
 import java.util.Map;
 
+@Slf4j
 public class DedupNode extends AbstractNode {
 
     private final Cache<String,Boolean> seen = Caffeine.newBuilder()
@@ -33,6 +35,10 @@ public class DedupNode extends AbstractNode {
 
         //중복 판정
         if (seen.getIfPresent(key) != null){
+
+            log.info("[중복] {}:{} measuredAt={}",
+                    sensorReading.deviceEui(), sensorReading.measurement(), sensorReading.measuredAt());
+
             QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.DUPLICATE,"중복: "+key);
             send("duplicate", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
             return;
@@ -42,6 +48,10 @@ public class DedupNode extends AbstractNode {
 
             //지연 판정
             if(gap.getSeconds() > 60){
+                
+                log.info("[지연] {}:{} {}초",
+                        sensorReading.deviceEui(), sensorReading.measurement(), gap.getSeconds());
+
                 send("out", message.withEntry("_delayed",true));
                 QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.DELAYED, "지연: " + gap.getSeconds() + "초");
                 send("delayed", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));

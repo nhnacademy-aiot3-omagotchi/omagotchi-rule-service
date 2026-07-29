@@ -13,7 +13,8 @@ public record QualityProperties(
 
     public record SensorId(
             String deviceEui,
-            String measurement
+            String measurement,
+            Integer expectedIntervalSeconds
     ){
 
     }
