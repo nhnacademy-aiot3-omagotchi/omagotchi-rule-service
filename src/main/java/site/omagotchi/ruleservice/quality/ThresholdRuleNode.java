@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.quality;
 
+import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.core.message.Message;
 import site.omagotchi.ruleservice.core.node.AbstractNode;
 import site.omagotchi.ruleservice.inbound.SensorReading;
@@ -9,6 +10,7 @@ import site.omagotchi.ruleservice.rule.infrastructure.cache.RuleCache;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 public class ThresholdRuleNode extends AbstractNode {
 
     private final RuleCache ruleCache;
@@ -35,6 +37,10 @@ public class ThresholdRuleNode extends AbstractNode {
             send("out", message.withEntry("_ruleHit", true));
 
             ThresholdRule rule = hit.get();
+
+            log.info("[룰적중] {}:{} {} {}",
+                    sensorReading.deviceEui(), sensorReading.measurement(), rule.operator(), rule.threshold());
+
             QualityEvent qualityEvent = QualityEvent.from(sensorReading, QualityEvent.Type.RULE_HIT,
                     "룰 적중: " + sensorReading.measurement() + " " + rule.operator() + " " + rule.threshold());
             send("ruleHit",Message.of(sensorReading.traceId(), Map.of("qualityEvent",qualityEvent)));
