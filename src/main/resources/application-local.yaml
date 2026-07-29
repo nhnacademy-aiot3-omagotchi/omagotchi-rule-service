@@ -27,8 +27,3 @@ eureka:
 # RestClientConfig에서 Core API
 core:
   base-url: ${CORE_BASE_URL:temp} # Core 쪽 정해지면 그때 넣어야 함
-
-#fixme
-sensor:
-  broker-url: ${SENSOR_BROKER_URL}
-  client-id: ${SENSOR_CLIENT_ID}
