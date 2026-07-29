@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.flow.presentation.dto;
+package site.omagotchi.ruleservice.flow.presentation.response;
 
 import site.omagotchi.ruleservice.flow.domain.FlowState;
 

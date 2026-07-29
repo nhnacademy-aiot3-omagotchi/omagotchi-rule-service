@@ -10,7 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.domain.FlowState;
-import site.omagotchi.ruleservice.flow.presentation.dto.FlowSummary;
+import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
 import site.omagotchi.ruleservice.flow.application.FlowConfigService;
 
 import java.util.List;
