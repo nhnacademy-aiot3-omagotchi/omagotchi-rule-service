@@ -3,12 +3,21 @@ spring:
     # 확장자가 없는 .env를 Java properties 형식으로 읽음
     import: "optional:file:./.env[.properties]"
   rabbitmq:
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 3
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
     host: ${RABBITMQ_HOST}
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
     publisher-confirm-type: correlated
-#    publisher-returns: true
+#    publisher-returns: true # routqueue를 만들지 않고 해당 옵션으로 콜백 메서드 처리도 되는듯
 
 eureka:
   client:
