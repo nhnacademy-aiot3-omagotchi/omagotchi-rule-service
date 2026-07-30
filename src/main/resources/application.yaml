@@ -58,6 +58,10 @@ sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
 
+engine:
+  id: ${ENGINE_ID}
+  priority: ${ENGINE_PRIORITY}
+
 quality:
   ranges:
     temperature:
