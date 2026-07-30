@@ -10,6 +10,7 @@ import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 
@@ -83,7 +84,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         receivedCounter.increment();
 
-        String payloadStr = new String(message.getPayload());
+        String payloadStr = new String(message.getPayload(), StandardCharsets.UTF_8);
 
         Message msg = Message.of(Map.of(
                 "topic", topic,
@@ -117,5 +118,9 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
     @Override
     public void authPacketArrived(int reasonCode, MqttProperties properties) {
 
+    }
+
+    public String getClientId() {
+        return clientId;
     }
 }

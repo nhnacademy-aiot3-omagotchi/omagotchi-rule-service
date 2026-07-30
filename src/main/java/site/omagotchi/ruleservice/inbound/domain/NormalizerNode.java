@@ -39,18 +39,29 @@ public class NormalizerNode extends AbstractNode {
         String deviceEui;
         String measurement;
 
-        if (topicSegments[0].equals("iot")){
-            if (topicSegments.length < 6) {
-                log.warn("[무효] iot 토픽 세그먼트 부족 (기대 6, 실제 {}): {}", topicSegments.length, topic);
-                QualityEvent qualityEvent = QualityEvent.invalid(message.getTraceId(),"iot 토픽 세그먼트 부족: " + topic);
+        if (topicSegments[0].equals("iot")) {
+            if (topicSegments.length == 6) {
+                // iot/{location}/{point}/{model}/{eui}/{measurement}
+                location = topicSegments[1];
+                point = topicSegments[2];
+                deviceEui = topicSegments[4];
+                measurement = topicSegments[5];
+
+            } else if (topicSegments.length == 5) {
+                // point 미지정 센서 - iot/{location}/{model}/{eui}/{measurement}
+                location = topicSegments[1];
+                point = null;
+                deviceEui = topicSegments[3];
+                measurement = topicSegments[4];
+
+            } else {
+                log.warn("[무효] iot 토픽 세그먼트 수 비정상 (기대 5 또는 6, 실제 {}): {}",
+                        topicSegments.length, topic);
+                QualityEvent qualityEvent = QualityEvent.invalid(
+                        message.getTraceId(), "iot 토픽 세그먼트 수 비정상: " + topic);
                 send("invalid", Message.of(message.getTraceId(), Map.of("qualityEvent", qualityEvent)));
                 return;
             }
-            location = topicSegments[1];
-            point = topicSegments[2];
-            deviceEui = topicSegments[4];
-            measurement = topicSegments[5];
-
         } else if (topicSegments[0].equals("modbus")) {
             if (topicSegments.length < 2) {
                 log.warn("[무효] modbus 토픽 세그먼트 부족 (기대 2, 실제 {}): {}", topicSegments.length, topic);

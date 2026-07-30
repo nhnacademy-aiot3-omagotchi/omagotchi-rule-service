@@ -88,7 +88,7 @@ quality:
   inventory:
     - deviceEui: "24e124126d152862"
       measurement: "temperature"
-      expectedIntervalSeconds: 60
+      expectedIntervalSeconds: 120
     - deviceEui: "24e124126d152590"
       measurement: "temperature"
       expectedIntervalSeconds: 60
@@ -97,7 +97,7 @@ quality:
       expectedIntervalSeconds: 60
     - deviceEui: "24e124128c140101"
       measurement: "temperature"
-      expectedIntervalSeconds: 900
+      expectedIntervalSeconds: 600
     - deviceEui: "24e124136d151836"
       measurement: "temperature"
       expectedIntervalSeconds: 60
@@ -109,7 +109,7 @@ quality:
       expectedIntervalSeconds: 60
     - deviceEui: "24e124725d089152"
       measurement: "temperature"
-      expectedIntervalSeconds: 900
+      expectedIntervalSeconds: 600
     - deviceEui: "modbus"
       measurement: "temperature"
       expectedIntervalSeconds: 5
