@@ -5,6 +5,7 @@ import site.omagotchi.ruleservice.flow.domain.FlowState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
 import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
 import site.omagotchi.ruleservice.flow.domain.Flow;
@@ -191,6 +192,32 @@ public class FlowManager {
         return flowEntries.keySet().stream() // flowEntries.keySet() = flowId들
                 .map(this::getSummary)
                 .toList();
+    }
+
+    /**
+     * 배포된 모든 플로우를 통틀어서 Activatable을 구현한 노드만 모아서 리턴
+     * EngineActiveController가 역할 전환 시 activate()/deactivate()를 지시할 대상
+     */
+    public List<Activatable> getActivatableNodes() {
+        List<Activatable> activatables = new ArrayList<>();
+
+        // 배포된 플로우 전부 훑고
+        for (Map.Entry<String, FlowEntry> entry : flowEntries.entrySet()) {
+            String flowId = entry.getKey();
+            FlowEntry flowEntry = entry.getValue();
+
+            // 그 안의 노드 전부 훑어서
+            for (NodeDefinition nodeDef : flowEntry.flowDefinition().nodes()) {
+                AbstractNode node = flowEngine.getNode(flowId, nodeDef.id()); // 실제 노드 인스턴스 가져오기
+
+                // Activatable인 것만 리스트에 담기
+                if (node instanceof Activatable activatable) { // 타입 체크 + 캐스팅 한 번에
+                    activatables.add(activatable);
+                }
+            }
+        }
+
+        return activatables;
     }
 
     // FlowManager 차원의 존재 확인
