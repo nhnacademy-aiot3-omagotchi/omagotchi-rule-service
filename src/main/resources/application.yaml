@@ -58,6 +58,19 @@ sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
 
+influx:
+  url: ${INFLUXDB_URL}
+  token: ${INFLUXDB_TOKEN}
+  org: ${INFLUXDB_ORG_ID}
+  buckets:
+    raw: omagotchi-raw
+    avg-1m: omagotchi-avg-1m
+    avg-1h: omagotchi-avg-1h
+    avg-1d: omagotchi-avg-1d
+  batch:
+    size: 1000
+    flush-interval-ms: 1000
+
 quality:
   ranges:
     temperature:
