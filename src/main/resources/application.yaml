@@ -53,6 +53,12 @@ management:
     health:
       show-details: never
 
+auth:
+  jwt:
+    issuer: ${JWT_ISSUER:https://identity.omagotchi.local}
+    audience: ${JWT_AUDIENCE:omagotchi-api}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:./secrets/jwt-public.pem}
+
 #fixme
 sensor:
   broker-url: ${SENSOR_BROKER_URL}
