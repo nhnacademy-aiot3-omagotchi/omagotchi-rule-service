@@ -7,3 +7,8 @@ eureka:
   client:
     # Discovery를 함께 실행할 때 .env에서 true로 변경
     enabled: ${EUREKA_ENABLED:false}
+
+auth:
+  jwt:
+    # 로컬 Identity에서 발급한 Access JWT와 같은 key pair의 public key를 사용
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:../identity-service/secrets/jwt-public.pem}
