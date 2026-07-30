@@ -13,7 +13,7 @@ import java.util.Map;
  * 향후 부작용 없이 호출 가능한 Rule Service의 실제 API로 Smoke Test를 대체 가능하면 제거 가능
  */
 @RestController
-@RequestMapping("/api/rules")
+@RequestMapping("/api/v1/rules")
 public class RulePingController {
 
     private final String applicationName;
