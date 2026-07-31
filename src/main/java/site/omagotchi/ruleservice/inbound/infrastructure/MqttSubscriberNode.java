@@ -18,18 +18,22 @@ import java.util.Map;
 public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
 
     private final String brokerUrl;
-    private final String topicFilter;
     private final String clientId;
+    private final String username;
+    private final String password;
+    private final String topicFilter;
     private final Counter receivedCounter;
     private MqttAsyncClient mqttAsyncClient;
 
-    public MqttSubscriberNode(String id, String brokerUrl, String topicFilter,
-                              String clientId, MeterRegistry meterRegistry) {
+    public MqttSubscriberNode(String id, String brokerUrl, String clientId, String username, String password, String topicFilter
+                              , MeterRegistry meterRegistry) {
         super(id);
 
         this.brokerUrl = brokerUrl;
-        this.topicFilter = topicFilter;
         this.clientId = clientId;
+        this.username = username;
+        this.password = password;
+        this.topicFilter = topicFilter;
         this.receivedCounter = meterRegistry.counter("mqtt.messages.received", "topicFilter", topicFilter);
 
         addOutputPort("out");
@@ -50,6 +54,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
             mqttConnectionOptions.setCleanStart(false);
             //연결 끊긴 뒤 몇 초까지 세션을 브로커가 기억해줄지
             mqttConnectionOptions.setSessionExpiryInterval(600L);
+            if (username != null && !username.isBlank()) {
+                mqttConnectionOptions.setUserName(username);
+                mqttConnectionOptions.setPassword(password.getBytes(StandardCharsets.UTF_8));
+            }
 
             mqttAsyncClient = new MqttAsyncClient(brokerUrl, clientId);
             //콜백 받을 객체 설정

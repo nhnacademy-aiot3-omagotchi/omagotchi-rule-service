@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 public class MqttSubscriberNodeTest {
 
-    private static final String TOPIC_FILTER = "iot/#";
+    private static final String TOPIC_FILTER = "application/#";
     private static final String CLIENT_ID = "rule-service-mqtt-sub";
 
     private MeterRegistry meterRegistry;
@@ -28,7 +28,7 @@ public class MqttSubscriberNodeTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         node = new MqttSubscriberNode(
-                "mqtt-sub", "tcp://localhost:1883", TOPIC_FILTER, CLIENT_ID, meterRegistry);
+                "mqtt-sub", "tcp://data.withIO.net:1883", CLIENT_ID, null, null, TOPIC_FILTER, meterRegistry);
 
         out = new RecordingConnection();
         node.getOutputPort("out").connect(out);

@@ -31,8 +31,10 @@ public class InboundNodeProvider implements NodeProvider {
                     return new MqttSubscriberNode(
                             id,
                             sensorProperties.brokerUrl(),
-                            topicFilter,
                             sensorProperties.clientId() + "-" + id,
+                            sensorProperties.username(),
+                            sensorProperties.password(),
+                            topicFilter,
                             meterRegistry
                     );
                 }),
