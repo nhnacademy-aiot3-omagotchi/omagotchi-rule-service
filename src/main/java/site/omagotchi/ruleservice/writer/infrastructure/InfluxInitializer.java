@@ -26,8 +26,8 @@ public class InfluxInitializer implements ApplicationRunner {
 
 
     private static final String FLUX_RESOURCE_1M = "flux/downsample-raw-to-1m.flux";
-    private static final String FLUX_RESOURCE_1H = "flux/downsample-raw-to-1h.flux";
-    private static final String FLUX_RESOURCE_1D = "flux/downsample-raw-to-1d.flux";
+    private static final String FLUX_RESOURCE_1H = "flux/downsample-1m-to-1h.flux";
+    private static final String FLUX_RESOURCE_1D = "flux/downsample-1h-to-1d.flux";
 
     private final InfluxDBClient client;
     private final InfluxDBProperties properties;
@@ -75,7 +75,7 @@ public class InfluxInitializer implements ApplicationRunner {
         }
 
         String flux = loadResource(fluxResource);
-        Task task = api.createTaskEvery(orgId, name, flux, every);
+        Task task = api.createTaskEvery(name, flux, every, orgId);
         log.info("Task 생성: {} (every {}, id={})", name, every, task.getId());
     }
 
