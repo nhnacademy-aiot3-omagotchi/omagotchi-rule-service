@@ -3,7 +3,7 @@ package site.omagotchi.ruleservice.writer.infrastructure;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "influx")
-public record InfluxDBProperties(
+public record InfluxDbProperties(
    String url,
    String token,
    String org,

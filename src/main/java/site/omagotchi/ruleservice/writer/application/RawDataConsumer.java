@@ -14,25 +14,24 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
 import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
-import site.omagotchi.ruleservice.writer.infrastructure.InFluxDBBatchWriter;
-import site.omagotchi.ruleservice.writer.infrastructure.InfluxDBProperties;
+import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbBatchWriter;
+import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
-import java.awt.*;
 import java.io.IOException;
 
 @Slf4j
 @Component
 public class RawDataConsumer {
 
-    private final InFluxDBBatchWriter batchWriter;
+    private final InfluxDbBatchWriter batchWriter;
     private final String rawBucket;
 
     private final Counter enqueued;
     private final Counter requeued;
     private final Counter failed;
 
-    public RawDataConsumer(InFluxDBBatchWriter batchWriter,
-                           InfluxDBProperties properties,
+    public RawDataConsumer(InfluxDbBatchWriter batchWriter,
+                           InfluxDbProperties properties,
                            MeterRegistry registry){
 
         this.batchWriter = batchWriter;

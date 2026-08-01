@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-public class InfluxDBConfig {
+public class InfluxDbConfig {
 
     @Bean(destroyMethod = "close")
-    public InfluxDBClient influxDBClient(InfluxDBProperties influxDBProperties){
+    public InfluxDBClient influxDBClient(InfluxDbProperties influxDBProperties){
         return InfluxDBClientFactory.create(
                 influxDBProperties.url(),
                 influxDBProperties.token().toCharArray(),

@@ -30,7 +30,7 @@ public class InfluxInitializer implements ApplicationRunner {
     private static final String FLUX_RESOURCE_1D = "flux/downsample-1h-to-1d.flux";
 
     private final InfluxDBClient client;
-    private final InfluxDBProperties properties;
+    private final InfluxDbProperties properties;
 
 
     @Override

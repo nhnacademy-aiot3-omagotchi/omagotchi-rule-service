@@ -17,7 +17,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 @Slf4j
 @Component
-public class InFluxDBBatchWriter implements SmartLifecycle {
+public class InfluxDbBatchWriter implements SmartLifecycle {
     private static final int DEFAULT_CAPACITY = 100_000;
     private static final int MAX_RETRY = 5;
     private static final long MIN_BACKOFF_MS = 200;
@@ -25,7 +25,7 @@ public class InFluxDBBatchWriter implements SmartLifecycle {
 
     private final int capacity;
     private final WriteApiBlocking writeApi;
-    private final InfluxDBProperties properties;
+    private final InfluxDbProperties properties;
 
     /** [버킷 이름, 데이터(point)]*/
     private final Map<String, BlockingQueue<Point>> queues = new ConcurrentHashMap<>();
@@ -35,10 +35,10 @@ public class InFluxDBBatchWriter implements SmartLifecycle {
     private volatile boolean healthy = true;
 
     @Autowired
-    public InFluxDBBatchWriter(InfluxDBClient client, InfluxDBProperties properties){
+    public InfluxDbBatchWriter(InfluxDBClient client, InfluxDbProperties properties){
         this(client, properties, DEFAULT_CAPACITY);
     }
-    public InFluxDBBatchWriter(InfluxDBClient client, InfluxDBProperties properties, int capacity){
+    public InfluxDbBatchWriter(InfluxDBClient client, InfluxDbProperties properties, int capacity){
         this.writeApi = client.getWriteApiBlocking();
         this.properties = properties;
         this.capacity = capacity;
