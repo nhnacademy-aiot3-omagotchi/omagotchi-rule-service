@@ -1,7 +1,6 @@
-// 1분 평균 → 1시간 평균
-// createTaskEvery(name, flux, "1h", orgId)로 등록 (-task.every = 1시간)
+// 1분 평균 → 1시간 평균 (스케줄 every=1h은 태스크 메타데이터에 저장됨)
 from(bucket: "omagotchi-avg-1m")
-    |> range(start: -task.every)
+    |> range(start: -1h)
     |> filter(fn: (r) => r._field == "value")
     |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
     |> to(bucket: "omagotchi-avg-1h")
