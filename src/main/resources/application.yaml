@@ -40,6 +40,9 @@ eureka:
 
   instance:
     prefer-ip-address: true
+    metadata-map:
+      engine-id: ${ENGINE_ID}
+      engine-priority: ${ENGINE_PRIORITY}
 
 management:
   endpoints:
@@ -58,6 +61,7 @@ sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
 
+# 이 프로세스 내부에서만 쓰이는 값 (@ConfigurationProperties(prefix = "engine")
 engine:
   id: ${ENGINE_ID}
   priority: ${ENGINE_PRIORITY}
