@@ -72,6 +72,10 @@ influx:
     raw: omagotchi-raw
     avg-1h: omagotchi-avg-1h
     avg-1d: omagotchi-avg-1d
+  retention:
+    raw-days: 7
+    avg-1h-days: 365
+    avg-1d-days: 0
   batch:
     size: 1000
     flush-interval-ms: 1000

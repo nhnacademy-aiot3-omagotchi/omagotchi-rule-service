@@ -47,7 +47,8 @@ class InfluxInitializerTest {
                 influx.getUrl(), TOKEN, orgId,
                 new InfluxDbProperties.Buckets(
                         "omagotchi-raw", "omagotchi-avg-1h", "omagotchi-avg-1d"),
-                new InfluxDbProperties.Batch(1000, 1000)
+                new InfluxDbProperties.Batch(1000, 1000),
+                new InfluxDbProperties.Retention(7, 365, 0)
         );
 
         // 검증 대상 실행

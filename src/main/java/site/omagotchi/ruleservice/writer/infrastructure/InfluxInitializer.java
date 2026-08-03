@@ -32,46 +32,52 @@ public class InfluxInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args){
-        try{
-            String orgId = properties.org();
 
-            createBucket(orgId, properties.buckets().raw(), 7 * 24 * 3600);
-            createBucket(orgId, properties.buckets().avg1h(), 365 * 24 * 3600);
-            createBucket(orgId, properties.buckets().avg1d(), 0);
+        String orgId = properties.org();
 
-            createTask(orgId, DOWNSAMPLE_1H, FLUX_RESOURCE_1H, "1h");
-            createTask(orgId, DOWNSAMPLE_1D, FLUX_RESOURCE_1D, "1d");
+        createBucket(orgId, properties.buckets().raw(), properties.retention().rawDays() * 24 * 3600);
+        createBucket(orgId, properties.buckets().avg1h(),  properties.retention().avg1hDays() *  24 * 3600);
+        createBucket(orgId, properties.buckets().avg1d(), properties.retention().avg1dDays() * 24 * 3600);
 
-        }catch (Exception e){
-            log.warn("InfluxDB 초기화 실패", e);
-        }
+        createTask(orgId, DOWNSAMPLE_1H, FLUX_RESOURCE_1H, "1h");
+        createTask(orgId, DOWNSAMPLE_1D, FLUX_RESOURCE_1D, "1d");
+
     }
 
     /** 버킷 생성. */
     private void createBucket(String orgId, String name, int retentionSeconds){
-        BucketsApi api = client.getBucketsApi();
-        if(api.findBucketByName(name) != null){
-            return;
-        }
+        try{
+            BucketsApi api = client.getBucketsApi();
 
-        BucketRetentionRules rule = new BucketRetentionRules().everySeconds(retentionSeconds);
-        api.createBucket(name, rule, orgId);
-        log.info("버킷 생성:{} (TTL {}s)", name, retentionSeconds);
+            if(api.findBucketByName(name) != null){
+                return;
+            }
+
+            BucketRetentionRules rule = new BucketRetentionRules().everySeconds(retentionSeconds);
+            api.createBucket(name, rule, orgId);
+            log.info("Bucket 생성:{} (TTL {}s)", name, retentionSeconds);
+        }catch (Exception e){
+            log.warn("Bucket 생성 실패: {} : {}", name, e.getMessage());
+        }
     }
 
     /** 태스크 생성. */
     private void createTask(String orgId, String name, String fluxResource, String every){
-        TasksApi api = client.getTasksApi();
+        try{
+            TasksApi api = client.getTasksApi();
 
-        for(Task task : api.findTasks()){
-            if(name.equals(task.getName())){
-                return;
+            for(Task task : api.findTasks()){
+                if(name.equals(task.getName())){
+                    return;
+                }
             }
-        }
 
-        String flux = loadResource(fluxResource);
-        Task task = api.createTaskEvery(name, flux, every, orgId);
-        log.info("Task 생성: {} (every {}, id={})", name, every, task.getId());
+            String flux = resolveBuckets(loadResource(fluxResource));
+            Task task = api.createTaskEvery(name, flux, every, orgId);
+            log.info("Task 생성: {} (every {}, id={})", name, every, task.getId());
+        }catch (Exception e){
+            log.warn("Task 생성 실패: {} : {}", name, e.getMessage());
+        }
     }
 
     /** 쿼리 로드. resources/flyx/path */
