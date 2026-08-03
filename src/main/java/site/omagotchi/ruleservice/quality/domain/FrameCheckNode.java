@@ -60,33 +60,32 @@ public class FrameCheckNode extends AbstractNode {
         }
 
         //결측 판정(+ 순서역전, 리셋)
-        if (sensorReading.fCnt() == null) {
-            return;
-        }
-        long fCnt = sensorReading.fCnt();
-        String fk = sensorReading.deviceEui() + ":" + sensorReading.measurement();
-        Long last = lastFcntMap.get(fk);
+        if (sensorReading.fCnt() != null) {
+            long fCnt = sensorReading.fCnt();
+            String fk = sensorReading.deviceEui() + ":" + sensorReading.measurement();
+            Long last = lastFcntMap.get(fk);
 
-        if (last == null) {
-            lastFcntMap.put(fk, fCnt);
+            if (last == null) {
+                lastFcntMap.put(fk, fCnt);
 
-        } else if (fCnt > last + 1) {
-        for (long missingFcnt = last + 1; missingFcnt < fCnt; missingFcnt++) {
-            log.warn("[결측] {}:{} fCnt {} 누락", sensorReading.deviceEui(), sensorReading.measurement(), missingFcnt);
+            } else if (fCnt > last + 1) {
+                for (long missingFcnt = last + 1; missingFcnt < fCnt; missingFcnt++) {
+                    log.warn("[결측] {}:{} fCnt {} 누락", sensorReading.deviceEui(), sensorReading.measurement(), missingFcnt);
 
-            QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
-                    "결측: fCnt " + missingFcnt + " 누락");
-            send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
-        }
-        lastFcntMap.put(fk, fCnt);
+                    QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
+                            "결측: fCnt " + missingFcnt + " 누락");
+                    send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
+                }
+                lastFcntMap.put(fk, fCnt);
 
-        } else if (fCnt < last) {
-            log.warn("[순서역전] {}:{} (fCnt {} 도착, 최신 {})", sensorReading.deviceEui(), sensorReading.measurement(), fCnt, last);
-            // 최신 값 유지 - 갱신하지 않음
+            } else if (fCnt < last) {
+                log.warn("[순서역전] {}:{} (fCnt {} 도착, 최신 {})", sensorReading.deviceEui(), sensorReading.measurement(), fCnt, last);
+                // 최신 값 유지 - 갱신하지 않음
 
-        } else {
-            // 정상 증가
-            lastFcntMap.put(fk, fCnt);
+            } else {
+                // 정상 증가
+                lastFcntMap.put(fk, fCnt);
+            }
         }
 
         //지연 판정
