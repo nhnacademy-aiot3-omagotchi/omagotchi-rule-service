@@ -7,9 +7,6 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-
 /**
  * 이 엔진 자신의 EngineInfo를 기동 시점에 한 번만 계산해서 보관
  * presentation(GET /self)과 향후 GET /engines의 SELF 항목이 같은 값을 공유하기 위함
