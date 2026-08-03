@@ -44,7 +44,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         this.capacity = capacity;
     }
 
-
+    /** 바로 쓰기를 하기보다는 배치를 위해 일단 버퍼에 적재*/
     public void offer(String bucket, Point point){
         if(point == null){
             return;
@@ -59,7 +59,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         points.offer(point);
     }
 
-
+    /**애플리케이션 가동시 start()호출 데몬 스레드를 하나 만들어 백그라운드에서 runloop()를 실행함.*/
     @Override
     public void start() {
         running = true;
@@ -68,6 +68,8 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         worker.start();
         log.info("InfluxDBBatchWriter 시작");
     }
+
+    /**배치 쓰기 작업 시작*/
     private void runLoop(){
         long interval = properties.batch().flushIntervalMs();
         while(running){
@@ -83,7 +85,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
             }
         }
     }
-
+    /**배치 작업을 위해 원본 큐애서 일부분만큼 drain(가져옴)*/
     private void drainAndWrite(String bucket){
         int batchSize = properties.batch().size();
 
@@ -106,11 +108,12 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
 
     }
 
+    /**쓰기 과정에서 문제가 발생 시 지수 백오프로 재시도 만약 완전 실패한다면 다시 버퍼에 적재*/
     private boolean writeWithRetry(String bucket, List<Point> batch){
         long backoff = MIN_BACKOFF_MS;
         for(int i = 1; i <= MAX_RETRY; i++){
             try{
-                writeApi.writePoints(bucket, properties.org(), batch);
+                writeApi.writePoints(bucket, properties.org(), batch); // 블로킹 - 쓰기 작업이 완료후에 healthy를 바꾸기 때문에
                 healthy = true;
                 return true;
             }catch (Exception e){
@@ -129,6 +132,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         return false;
     }
 
+    /**앱 종료시 stop()호출 각 버퍼의 버킷을 조회해 남아있는 데이터를 쓰기과정을 실행하고 종료*/
     @Override
     public void stop() {
         running = false;

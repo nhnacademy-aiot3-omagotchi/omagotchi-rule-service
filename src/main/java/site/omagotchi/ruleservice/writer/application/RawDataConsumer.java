@@ -18,7 +18,9 @@ import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbBatchWriter;
 import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
 import java.io.IOException;
-
+/**
+ * raw메세지 소비자
+ * 해당 메세지를 소비함과 동시에 InfluxDbBatchWriter를 사용해서 Influx쓰기 실행*/
 @Slf4j
 @Component
 public class RawDataConsumer {
@@ -41,30 +43,31 @@ public class RawDataConsumer {
         this.failed = registry.counter("influx.raw.failed");
     }
     @RabbitListener(
-            queues = RabbitTopologyConfig.QUEUE_RAW,
-            concurrency = "2-8",
-            ackMode = "MANUAL"
+            queues = RabbitTopologyConfig.QUEUE_RAW, // raw 큐에 메세지가 적재된다면
+            concurrency = "2-8", //2~8개의 쓰레드를 사용해
+            ackMode = "MANUAL" // 수동 ack모드를 통해 메세지를 소비
     )
     public void consume(
             SensorReading reading,
             Channel channel,
-            @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException {
+            @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException { // tag=메세지의 순번. 수동 ack모드에서 필요함.
 
         if(reading.traceId() != null){
             MDC.put("traceId", reading.traceId());
         }
 
         try{
-            if(!batchWriter.isHealthy()){
+            if(!batchWriter.isHealthy()){ // InfluxDB 장애. raw 큐에 재적재
                 channel.basicNack(tag, false, true);
                 requeued.increment();
                 return;
             }
-            batchWriter.offer(rawBucket, toPoint(reading));
+
+            batchWriter.offer(rawBucket, toPoint(reading)); //논 블로킹 작업
             channel.basicAck(tag, false);
             enqueued.increment();
 
-        }catch (Exception e){
+        }catch (Exception e){ //메세지 자체를 처리못함 (재전송이 의미가 없음) DLQ 전송
             failed.increment();
             log.error("raw 소비 실패 -> DLQ, deviceEui={}, measurment={}", reading.deviceEui(), reading.measurement(), e);
             channel.basicNack(tag, false, false);
