@@ -38,6 +38,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
     public InfluxDbBatchWriter(InfluxDBClient client, InfluxDbProperties properties){
         this(client, properties, DEFAULT_CAPACITY);
     }
+
     public InfluxDbBatchWriter(InfluxDBClient client, InfluxDbProperties properties, int capacity){
         this.writeApi = client.getWriteApiBlocking();
         this.properties = properties;
@@ -144,8 +145,8 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
                 Thread.currentThread().interrupt();
             }
 
-            for(String buket : queues.keySet()){
-                drainAndWrite(buket);
+            for(String bucket : queues.keySet()){
+                drainAndWrite(bucket);
             }
         }
         log.info("InfluxDBBatchWriter 종료");
