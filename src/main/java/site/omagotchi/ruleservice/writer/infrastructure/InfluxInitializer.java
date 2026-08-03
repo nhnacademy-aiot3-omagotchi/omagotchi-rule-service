@@ -80,7 +80,15 @@ public class InfluxInitializer implements ApplicationRunner {
         }
     }
 
-    /** 쿼리 로드. resources/flyx/path */
+    /** flux의 버킷 플레이스홀더를 설정값(properties.buckets)으로 치환 — 환경별 버킷 이름 대응 */
+    private String resolveBuckets(String flux){
+        return flux
+                .replace("${rawBucket}",   properties.buckets().raw())
+                .replace("${avg1hBucket}", properties.buckets().avg1h())
+                .replace("${avg1dBucket}", properties.buckets().avg1d());
+    }
+
+    /** 쿼리 로드. resources/flux/path */
     private String loadResource(String path){
         try{
             return new String(
