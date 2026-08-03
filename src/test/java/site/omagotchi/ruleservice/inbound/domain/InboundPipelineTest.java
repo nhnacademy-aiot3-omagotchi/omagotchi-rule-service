@@ -53,7 +53,6 @@ class InboundPipelineTest {
         engine.start(FLOW_ID);
 
         // MqttSubscriberNode가 만들었을 법한 원시 메시지 (traceId는 여기서 발급됨)
-        // MqttSubscriberNode가 만들었을 법한 원시 메시지 (traceId는 여기서 발급됨)
         String rawJson = """
                 {
                   "deviceInfo": {
