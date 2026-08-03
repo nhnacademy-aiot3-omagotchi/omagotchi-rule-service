@@ -10,9 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 @Slf4j
@@ -25,10 +23,13 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
 
     private final int capacity;
     private final WriteApiBlocking writeApi;
-    private final InfluxDbProperties properties;
+    private final String orgId;
+    private final String bucket;
+    private final int batchSize;
+    private final long flushIntervalMs;
 
-    /** [버킷 이름, 데이터(point)]*/
-    private final Map<String, BlockingQueue<Point>> queues = new ConcurrentHashMap<>();
+    /** raw 버킷 하나만 적재하므로 단일 큐 */
+    private final BlockingQueue<Point> queue = new LinkedBlockingQueue<>();
     private Thread worker;
 
     private volatile boolean running = false;
@@ -41,57 +42,53 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
 
     public InfluxDbBatchWriter(InfluxDBClient client, InfluxDbProperties properties, int capacity){
         this.writeApi = client.getWriteApiBlocking();
-        this.properties = properties;
+        this.orgId = properties.org();
+        this.bucket = properties.buckets().raw();
+        this.batchSize = properties.batch().size();
+        this.flushIntervalMs = properties.batch().flushIntervalMs();
         this.capacity = capacity;
     }
 
-    /** 바로 쓰기를 하기보다는 배치를 위해 일단 버퍼에 적재*/
-    public void offer(String bucket, Point point){
+    /** 바로 쓰기를 하기보다는 배치를 위해 일단 버퍼에 적재 */
+    public void offer(Point point){
         if(point == null){
             return;
         }
 
-        BlockingQueue<Point> points = queues.computeIfAbsent(bucket, b -> new LinkedBlockingQueue<>());
-        while(points.size() >= capacity){
-            points.poll();
-            log.warn("버퍼 포화 -> 페기, bucket={}", bucket);
+        while(queue.size() >= capacity){
+            queue.poll();
+            log.warn("버퍼 포화 -> 폐기");
         }
 
-        points.offer(point);
+        queue.offer(point);
     }
 
-    /**애플리케이션 가동시 start()호출 데몬 스레드를 하나 만들어 백그라운드에서 runloop()를 실행함.*/
+    /** 애플리케이션 가동 시 start() 호출, 데몬 스레드에서 runLoop() 실행 */
     @Override
     public void start() {
         running = true;
-        worker = new Thread(this::runLoop);
+        worker = new Thread(this::runLoop, "influx-batch-writer");
         worker.setDaemon(true);
         worker.start();
-        log.info("InfluxDBBatchWriter 시작");
+        log.info("InfluxDbBatchWriter 시작");
     }
 
-    /**배치 쓰기 작업 시작*/
+    /** 배치 쓰기 루프 */
     private void runLoop(){
-        long interval = properties.batch().flushIntervalMs();
         while(running){
             try{
-                Thread.sleep(interval);
+                Thread.sleep(flushIntervalMs);
             }catch (InterruptedException e){
                 Thread.currentThread().interrupt();
                 break;
             }
 
-            for(String bucket : queues.keySet()){
-                drainAndWrite(bucket);
-            }
+            drainAndWrite();
         }
     }
-    /**배치 작업을 위해 원본 큐애서 일부분만큼 drain(가져옴)*/
-    private void drainAndWrite(String bucket){
-        int batchSize = properties.batch().size();
 
-        BlockingQueue<Point> queue = queues.get(bucket);
-
+    /** 버퍼에서 batchSize만큼 꺼내 쓴다 */
+    private void drainAndWrite(){
         List<Point> batch = new ArrayList<>(batchSize);
 
         while(!queue.isEmpty()){
@@ -100,40 +97,40 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
             if(batch.isEmpty()){
                 break;
             }
-            if(!writeWithRetry(bucket, batch)){
-                batch.forEach(queue::offer);
+
+            if(!writeWithRetry(batch)){
+                batch.forEach(this::offer);
                 return;
             }
             batch.clear();
         }
-
     }
 
-    /**쓰기 과정에서 문제가 발생 시 지수 백오프로 재시도 만약 완전 실패한다면 다시 버퍼에 적재*/
-    private boolean writeWithRetry(String bucket, List<Point> batch){
+    /** 쓰기 실패 시 지수 백오프로 재시도, 완전 실패하면 버퍼에 보존 */
+    private boolean writeWithRetry(List<Point> batch){
         long backoff = MIN_BACKOFF_MS;
         for(int i = 1; i <= MAX_RETRY; i++){
             try{
-                writeApi.writePoints(bucket, properties.org(), batch); // 블로킹 - 쓰기 작업이 완료후에 healthy를 바꾸기 때문에
+                writeApi.writePoints(bucket, orgId, batch); // 블로킹 - 완료 후 healthy 갱신
                 healthy = true;
                 return true;
             }catch (Exception e){
                 healthy = false;
-                log.warn("InfluxDB 쓰기 실패 (bucket={}, {}/{}회): {}",
-                        bucket, i, MAX_RETRY, e.getMessage());
+                log.warn("InfluxDB 쓰기 실패 ({}/{}회): {}", i, MAX_RETRY, e.getMessage());
                 try{
                     Thread.sleep(backoff);
                 }catch (InterruptedException ex){
                     Thread.currentThread().interrupt();
+                    break; // 인터럽트(셧다운) 시 재시도 즉시 중단 → 워커 종료
                 }
                 backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
             }
         }
-        log.error("InfluxDB 쓰기 -> 버퍼에 보존 bucket={}", bucket);
+        log.error("InfluxDB 쓰기 -> 버퍼에 보존");
         return false;
     }
 
-    /**앱 종료시 stop()호출 각 버퍼의 버킷을 조회해 남아있는 데이터를 쓰기과정을 실행하고 종료*/
+    /** 앱 종료 시 stop() 호출, 남은 데이터 최종 flush 후 종료 */
     @Override
     public void stop() {
         running = false;
@@ -145,11 +142,13 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
                 Thread.currentThread().interrupt();
             }
 
-            for(String bucket : queues.keySet()){
-                drainAndWrite(bucket);
+            if(worker.isAlive()){
+                log.warn("워커가 5초 내 미종료 - 최종 flush 생략(동시 접근 방지)");
+            }else{
+                drainAndWrite(); // 워커가 완전히 끝났을 때만 최종 flush
             }
         }
-        log.info("InfluxDBBatchWriter 종료");
+        log.info("InfluxDbBatchWriter 종료");
     }
 
     @Override
