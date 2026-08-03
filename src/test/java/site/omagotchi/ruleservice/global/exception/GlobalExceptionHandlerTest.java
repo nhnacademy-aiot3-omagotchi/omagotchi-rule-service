@@ -9,11 +9,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.MDC;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.context.request.ServletWebRequest;
 import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
 
 import java.util.List;
@@ -27,11 +30,12 @@ class GlobalExceptionHandlerTest {
 
     private static final String REQUEST_URI = "/flows/flow-1";
     private static final String MDC_REQUEST_ID_KEY = "requestId";
+    private static final String DIAGNOSTIC_MESSAGE =
+            "flowId = flow-1, nodeId = node-a, threshold = -1, expected = 0 이상";
 
     @Mock
     private HttpServletRequest request;
 
-    @Mock
     private GlobalExceptionHandler globalExceptionHandler;
 
     @BeforeEach
@@ -46,12 +50,17 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("BusinessException은 자신의 ErrorCode에 맞는 상태, 코드, 메시지로 응답한다")
+    @DisplayName("BusinessException의 ErrorCode 기준 응답")
     void handlesBusinessException() {
-        BusinessException e = new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        // Given
+        BusinessException exception =
+                new BusinessException(CommonErrorCode.INVALID_REQUEST);
 
-        ResponseEntity<ApiErrorResponse> response = this.globalExceptionHandler.handleBusinessException(e, request);
+        // When
+        ResponseEntity<ApiErrorResponse> response =
+                globalExceptionHandler.handleBusinessException(exception, request);
 
+        // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().code()).isEqualTo("COMMON_INVALID_REQUEST");
         assertThat(response.getBody().message()).isEqualTo("요청값이 올바르지 않습니다.");
@@ -59,18 +68,26 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("detail이 있으면 응답 message에 에러코드 메시지와 함께 실린다")
-    void includesDetailInResponseMessage() {
-        BusinessException exception = new BusinessException(FlowErrorCode.NODE_CONFIG_REJECTED, "flowId = flow-1, nodeId = node-a, reason = threshold는 0 이상이어야 합니다");
+    @DisplayName("외부 응답에서 진단 메시지 숨김")
+    void hidesDiagnosticMessageFromResponse() {
+        // Given
+        BusinessException exception = new BusinessException(
+                FlowErrorCode.NODE_CONFIG_REJECTED,
+                DIAGNOSTIC_MESSAGE
+        );
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleBusinessException(exception, request);
+        // When
+        ResponseEntity<ApiErrorResponse> response =
+                globalExceptionHandler.handleBusinessException(exception, request);
 
-        assertThat(response.getBody().message()).isEqualTo(FlowErrorCode.NODE_CONFIG_REJECTED.message() + " - flowId = flow-1, nodeId = node-a, reason = threshold는 0 이상이어야 합니다");
+        // Then
+        assertThat(response.getBody().message()).isEqualTo(FlowErrorCode.NODE_CONFIG_REJECTED.message());
     }
 
     @Test
-    @DisplayName("검증 실패 시 필드 오류의 기본 메시지를 사용해 400으로 응답한다")
+    @DisplayName("검증 실패 시 필드 오류 기본 메시지로 400 응답")
     void handlesValidationExceptionWithFieldMessage() {
+        // Given
         BindingResult bindingResult = mock(BindingResult.class);
         FieldError fieldError = new FieldError("dto", "config", "config는 null일 수 없습니다.");
         when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError));
@@ -78,29 +95,45 @@ class GlobalExceptionHandlerTest {
         MethodArgumentNotValidException exception = mock(MethodArgumentNotValidException.class);
         when(exception.getBindingResult()).thenReturn(bindingResult);
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleValidationException(exception, request);
+        // When
+        ResponseEntity<Object> response = globalExceptionHandler.handleMethodArgumentNotValid(
+                exception,
+                HttpHeaders.EMPTY,
+                HttpStatus.BAD_REQUEST,
+                new ServletWebRequest(request)
+        );
 
+        // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().message()).isEqualTo("config는 null일 수 없습니다.");
+        assertThat(body(response).message()).isEqualTo("config는 null일 수 없습니다.");
     }
 
     @Test
-    @DisplayName("필드 오류가 없으면 기본 안내 메시지로 응답한다")
+    @DisplayName("필드 오류 부재 시 기본 안내 메시지 응답")
     void handlesValidationExceptionWithoutFieldErrors() {
+        // Given
         BindingResult bindingResult = mock(BindingResult.class);
         when(bindingResult.getFieldErrors()).thenReturn(List.of());
 
         MethodArgumentNotValidException exception = mock(MethodArgumentNotValidException.class);
         when(exception.getBindingResult()).thenReturn(bindingResult);
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleValidationException(exception, request);
+        // When
+        ResponseEntity<Object> response = globalExceptionHandler.handleMethodArgumentNotValid(
+                exception,
+                HttpHeaders.EMPTY,
+                HttpStatus.BAD_REQUEST,
+                new ServletWebRequest(request)
+        );
 
-        assertThat(response.getBody().message()).isEqualTo("요청값이 올바르지 않습니다.");
+        // Then
+        assertThat(body(response).message()).isEqualTo("요청값이 올바르지 않습니다.");
     }
 
     @Test
-    @DisplayName("필드 오류는 있지만 기본 메시지가 null이면 기본 안내 메시지로 대체한다")
+    @DisplayName("필드 오류 기본 메시지 null 시 기본 안내 메시지 대체")
     void handlesValidationExceptionWithNullDefaultMessage() {
+        // Given
         BindingResult bindingResult = mock(BindingResult.class);
         FieldError fieldError = new FieldError("dto", "config", null, false, null, null, null);
         when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError));
@@ -108,39 +141,89 @@ class GlobalExceptionHandlerTest {
         MethodArgumentNotValidException exception = mock(MethodArgumentNotValidException.class);
         when(exception.getBindingResult()).thenReturn(bindingResult);
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleValidationException(exception, request);
+        // When
+        ResponseEntity<Object> response = globalExceptionHandler.handleMethodArgumentNotValid(
+                exception,
+                HttpHeaders.EMPTY,
+                HttpStatus.BAD_REQUEST,
+                new ServletWebRequest(request)
+        );
 
-        assertThat(response.getBody().message()).isEqualTo("요청값이 올바르지 않습니다.");
+        // Then
+        assertThat(body(response).message()).isEqualTo("요청값이 올바르지 않습니다.");
     }
 
     @Test
-    @DisplayName("요청 본문을 읽을 수 없으면 MALFORMED_REQUEST로 400 응답한다")
+    @DisplayName("읽을 수 없는 요청 본문을 MALFORMED_REQUEST 400으로 응답")
     void handlesMalformedRequest() {
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleMalformedRequest(request);
+        // Given
+        HttpMessageNotReadableException exception = mock(HttpMessageNotReadableException.class);
 
+        // When
+        ResponseEntity<Object> response = globalExceptionHandler.handleHttpMessageNotReadable(
+                exception,
+                HttpHeaders.EMPTY,
+                HttpStatus.BAD_REQUEST,
+                new ServletWebRequest(request)
+        );
+
+        // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody().code()).isEqualTo("COMMON_MALFORMED_REQUEST");
+        assertThat(body(response).code()).isEqualTo("COMMON_MALFORMED_REQUEST");
     }
 
     @Test
-    @DisplayName("처리되지 않은 예외는 500(COMMON_INTERNAL_ERROR)으로 응답한다")
-    void handlesUnexpectedException() {
-        RuntimeException exception = new RuntimeException("예상 못한 오류");
+    @DisplayName("호출 계약 위반을 500(COMMON_INTERNAL_ERROR)으로 숨김")
+    void hidesIllegalArgumentException() {
+        // Given
+        when(request.getMethod()).thenReturn("POST");
+        IllegalArgumentException exception =
+                new IllegalArgumentException("외부에 노출하면 안 되는 인자 정보");
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleUnexpectedException(exception, request);
+        // When
+        ResponseEntity<ApiErrorResponse> response =
+                globalExceptionHandler.handleUnexpectedException(exception, request);
 
+        // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_ERROR");
+        assertThat(response.getBody().message()).isEqualTo(CommonErrorCode.INTERNAL_SERVER_ERROR.message());
     }
 
     @Test
-    @DisplayName("MDC에 있는 requestId가 응답 바디에 그대로 실린다")
+    @DisplayName("내부 상태 위반을 500(COMMON_INTERNAL_ERROR)으로 숨김")
+    void hidesIllegalStateException() {
+        // Given
+        when(request.getMethod()).thenReturn("POST");
+        IllegalStateException exception =
+                new IllegalStateException("외부에 노출하면 안 되는 상태 정보");
+
+        // When
+        ResponseEntity<ApiErrorResponse> response =
+                globalExceptionHandler.handleUnexpectedException(exception, request);
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_ERROR");
+        assertThat(response.getBody().message()).isEqualTo(CommonErrorCode.INTERNAL_SERVER_ERROR.message());
+    }
+
+    @Test
+    @DisplayName("MDC requestId의 응답 Body 반영")
     void includesRequestIdFromMdc() {
+        // Given
         MDC.put(MDC_REQUEST_ID_KEY, "test-request-id");
-        BusinessException exception = new BusinessException(CommonErrorCode.INTERNAL_ERROR);
+        BusinessException exception = new BusinessException(CommonErrorCode.INVALID_REQUEST);
 
-        ResponseEntity<ApiErrorResponse> response = globalExceptionHandler.handleBusinessException(exception, request);
+        // When
+        ResponseEntity<ApiErrorResponse> response =
+                globalExceptionHandler.handleBusinessException(exception, request);
 
+        // Then
         assertThat(response.getBody().requestId()).isEqualTo("test-request-id");
+    }
+
+    private ApiErrorResponse body(ResponseEntity<Object> response) {
+        return (ApiErrorResponse) response.getBody();
     }
 }
