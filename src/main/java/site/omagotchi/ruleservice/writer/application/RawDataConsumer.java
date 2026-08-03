@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
 import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbBatchWriter;
-import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
 import java.io.IOException;
 /**
@@ -26,18 +25,15 @@ import java.io.IOException;
 public class RawDataConsumer {
 
     private final InfluxDbBatchWriter batchWriter;
-    private final String rawBucket;
 
     private final Counter enqueued;
     private final Counter requeued;
     private final Counter failed;
 
     public RawDataConsumer(InfluxDbBatchWriter batchWriter,
-                           InfluxDbProperties properties,
                            MeterRegistry registry){
 
         this.batchWriter = batchWriter;
-        this.rawBucket = properties.buckets().raw();
         this.enqueued = registry.counter("influx.raw.cousumed");
         this.requeued = registry.counter("influx.raw.requeued");
         this.failed = registry.counter("influx.raw.failed");
@@ -63,7 +59,7 @@ public class RawDataConsumer {
                 return;
             }
 
-            batchWriter.offer(rawBucket, toPoint(reading)); //논 블로킹 작업
+            batchWriter.offer(toPoint(reading)); //논 블로킹 작업
             channel.basicAck(tag, false);
             enqueued.increment();
 
