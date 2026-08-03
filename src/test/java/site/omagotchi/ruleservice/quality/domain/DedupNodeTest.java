@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.quality.domain.QualityEvent;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,14 +13,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DedupNodeTest {
 
-    private DedupNode node;
+    private FrameCheckNode node;
     private RecordingConnection out;
     private RecordingConnection duplicate;
     private RecordingConnection delayed;
 
     @BeforeEach
     void setUp() {
-        node = new DedupNode("dedup");
+        node = new FrameCheckNode("dedup");
         out = new RecordingConnection();
         duplicate = new RecordingConnection();
         delayed = new RecordingConnection();

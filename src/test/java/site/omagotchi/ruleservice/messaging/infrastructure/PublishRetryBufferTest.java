@@ -112,6 +112,7 @@ class PublishRetryBufferTest {
                 30.0,
                 Instant.now(),
                 Instant.now(),
-                "온도센서");
+                "온도센서",
+                1L);
     }
 }

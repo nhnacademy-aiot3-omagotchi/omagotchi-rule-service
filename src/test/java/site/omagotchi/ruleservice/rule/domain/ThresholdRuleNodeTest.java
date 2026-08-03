@@ -45,7 +45,7 @@ class ThresholdRuleNodeTest {
         Instant now = Instant.now();
         SensorReading sensorReading = new SensorReading(
                 "trace-1", "실습실", "전방", "eui-1", measurement,
-                value, now, now, "sensor-1"
+                value, now, now, "sensor-1",1L
         );
         return Message.of("trace-1", Map.of("sensorReading", sensorReading));
     }

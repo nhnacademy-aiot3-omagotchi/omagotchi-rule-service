@@ -21,8 +21,15 @@ public record QualityEvent(
         String detail          // 판정 사유 (예: "co2 4200 > 임계 1000")
 ) {
     public enum Type {
-        ANOMALY, MISSING, DUPLICATE, DELAYED, STUCK, RULE_HIT, INVALID
-    }
+        ANOMALY,        // 물리범위 밖 [범위초과]
+        MISSING,        // fCnt 갭 - 프레임이 영영 없음 [결측]
+        DUPLICATE,      // 같은 프레임 재도착 [중복]
+        DELAYED,        // 늦은 도착 [지연]
+        STUCK,          // 값 고정 [무변동]
+        RULE_HIT,       // 룰 조건 충족 [룰적중]
+        INVALID,        // 판독 불가 [무효]
+        DISCONNECTED    // 주기 3배 침묵 상태 [끊김 시작/종료]
+        }
 
     public static QualityEvent from(SensorReading sensorReading, Type type, String detail){
         return new QualityEvent(
@@ -56,11 +63,11 @@ public record QualityEvent(
         );
     }
 
-    public static QualityEvent missing(String deviceEui, String measurement, String detail) {
+    public static QualityEvent disconnected(String deviceEui, String measurement, String detail) {
         return new QualityEvent(
                 1,
                 null,
-                Type.MISSING,
+                Type.DISCONNECTED,
                 null,
                 null,
                 deviceEui,

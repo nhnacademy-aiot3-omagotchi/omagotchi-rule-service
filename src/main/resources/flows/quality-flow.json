@@ -1,37 +1,36 @@
 {
   "id": "quality-flow",
   "name": "품질 판정 파이프라인 (Part E)",
-  "description": "수신 -> 정규화 -> 중복/지연 -> 범위 -> 무변동 -> 룰 -> 발행. 품질 이벤트는 Queue B로",
+  "description": "수신(ChirpStack 직결) -> 정규화 -> 프레임검사 -> 범위 -> 무변동 -> 룰 -> 발행. 품질 이벤트는 Queue B로",
   "nodes": [
-    { "id": "q-mqtt-sub",        "type": "MqttSubscriber", "config": { "topicFilter": "iot/#" } },
-    { "id": "q-mqtt-sub-modbus", "type": "MqttSubscriber", "config": { "topicFilter": "modbus/#" } },
-    { "id": "q-normalizer",      "type": "Normalizer",     "config": {} },
-    { "id": "q-dedup",           "type": "Dedup",          "config": {} },
-    { "id": "q-range",           "type": "RangeValidator", "config": {} },
-    { "id": "q-stuck",           "type": "StuckSensor",    "config": {} },
-    { "id": "q-threshold",       "type": "ThresholdRule",  "config": {} },
-    { "id": "q-missing",         "type": "MissingDetector","config": {} },
-    { "id": "q-rabbit-raw",      "type": "RabbitPublisher","config": { "mode": "RAW" } },
-    { "id": "q-rabbit-quality",  "type": "RabbitPublisher","config": { "mode": "QUALITY" } },
-    { "id": "q-collector",       "type": "Collector",      "config": {} }
+    { "id": "q-mqtt-sub",        "type": "MqttSubscriber",     "config": { "topicFilter": "application/+/device/+/event/up" } },
+    { "id": "q-normalizer",      "type": "Normalizer",         "config": {} },
+    { "id": "q-frame-check",     "type": "FrameCheck",         "config": {} },
+    { "id": "q-range",           "type": "RangeValidator",     "config": {} },
+    { "id": "q-stuck",           "type": "StuckSensor",        "config": {} },
+    { "id": "q-threshold",       "type": "ThresholdRule",      "config": {} },
+    { "id": "q-disconnect",      "type": "DisconnectDetector", "config": {} },
+    { "id": "q-rabbit-raw",      "type": "RabbitPublisher",    "config": { "mode": "RAW" } },
+    { "id": "q-rabbit-quality",  "type": "RabbitPublisher",    "config": { "mode": "QUALITY" } },
+    { "id": "q-collector",       "type": "Collector",          "config": {} }
   ],
   "connections": [
-    { "from": "q-mqtt-sub:out",        "to": "q-normalizer:in" },
-    { "from": "q-mqtt-sub-modbus:out", "to": "q-normalizer:in" },
+    { "from": "q-mqtt-sub:out",     "to": "q-normalizer:in" },
 
-    { "from": "q-normalizer:out", "to": "q-dedup:in" },
-    { "from": "q-dedup:out",      "to": "q-range:in" },
-    { "from": "q-range:out",      "to": "q-stuck:in" },
-    { "from": "q-stuck:out",      "to": "q-threshold:in" },
-    { "from": "q-threshold:out",  "to": "q-rabbit-raw:in" },
-    { "from": "q-threshold:out",  "to": "q-collector:in" },
+    { "from": "q-normalizer:out",   "to": "q-frame-check:in" },
+    { "from": "q-frame-check:out",  "to": "q-range:in" },
+    { "from": "q-range:out",        "to": "q-stuck:in" },
+    { "from": "q-stuck:out",        "to": "q-threshold:in" },
+    { "from": "q-threshold:out",    "to": "q-rabbit-raw:in" },
+    { "from": "q-threshold:out",    "to": "q-collector:in" },
 
-    { "from": "q-normalizer:invalid", "to": "q-rabbit-quality:in" },
-    { "from": "q-dedup:duplicate",    "to": "q-rabbit-quality:in" },
-    { "from": "q-dedup:delayed",      "to": "q-rabbit-quality:in" },
-    { "from": "q-range:anomaly",      "to": "q-rabbit-quality:in" },
-    { "from": "q-stuck:stuck",        "to": "q-rabbit-quality:in" },
-    { "from": "q-threshold:ruleHit",  "to": "q-rabbit-quality:in" },
-    { "from": "q-missing:missing",    "to": "q-rabbit-quality:in" }
+    { "from": "q-normalizer:invalid",    "to": "q-rabbit-quality:in" },
+    { "from": "q-frame-check:duplicate", "to": "q-rabbit-quality:in" },
+    { "from": "q-frame-check:delayed",   "to": "q-rabbit-quality:in" },
+    { "from": "q-frame-check:missing",   "to": "q-rabbit-quality:in" },
+    { "from": "q-range:anomaly",         "to": "q-rabbit-quality:in" },
+    { "from": "q-stuck:stuck",           "to": "q-rabbit-quality:in" },
+    { "from": "q-threshold:ruleHit",     "to": "q-rabbit-quality:in" },
+    { "from": "q-disconnect:disconnect", "to": "q-rabbit-quality:in" }
   ]
 }

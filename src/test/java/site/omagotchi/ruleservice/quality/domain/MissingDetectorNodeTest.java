@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.quality.domain.QualityEvent;
-import site.omagotchi.ruleservice.quality.domain.LastSeenRegistry;
 import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
 import org.junit.jupiter.api.AfterEach;
@@ -18,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class MissingDetectorNodeTest {
 
     private LastSeenRegistry registry;
-    private MissingDetectorNode node;
+    private DisconnectDetectorNode node;
     private RecordingConnection missing;
 
     @BeforeEach
@@ -29,7 +27,7 @@ public class MissingDetectorNodeTest {
                 Map.of(), List.of(new QualityProperties.SensorId("eui-1", "temperature", 60))
         );
 
-        node = new MissingDetectorNode("missing", registry, properties);
+        node = new DisconnectDetectorNode("missing", registry, properties);
         missing = new RecordingConnection();
         node.getOutputPort("missing").connect(missing);
 
@@ -96,7 +94,7 @@ public class MissingDetectorNodeTest {
                 new QualityProperties.SensorId("fast", "temperature", 5),
                 new QualityProperties.SensorId("slow", "temperature", 900)
         ));
-        MissingDetectorNode node2 = new MissingDetectorNode("m2", registry, properties);
+        DisconnectDetectorNode node2 = new DisconnectDetectorNode("m2", registry, properties);
         RecordingConnection missing2 = new RecordingConnection();
         node2.getOutputPort("missing").connect(missing2);
         node2.initialize();

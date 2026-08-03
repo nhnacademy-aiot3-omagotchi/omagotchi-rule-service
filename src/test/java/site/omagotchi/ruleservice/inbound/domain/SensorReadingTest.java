@@ -22,7 +22,8 @@ class SensorReadingTest {
                 650.0,
                 Instant.parse("2026-07-07T03:34:10.456Z"),
                 Instant.parse("2026-07-07T03:34:11.000Z"),
-                "AM107-140101"
+                "AM107-140101",
+                12345L
         );
 
         //직렬화
