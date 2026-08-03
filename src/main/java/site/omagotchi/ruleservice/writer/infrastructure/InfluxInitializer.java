@@ -20,13 +20,10 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 @Component
 public class InfluxInitializer implements ApplicationRunner {
-    private static final String DOWNSAMPLE_1M = "omagotchi-downsample-1m";
     private static final String DOWNSAMPLE_1H = "omagotchi-downsample-1h";
     private static final String DOWNSAMPLE_1D = "omagotchi-downsample-1d";
 
-
-    private static final String FLUX_RESOURCE_1M = "flux/downsample-raw-to-1m.flux";
-    private static final String FLUX_RESOURCE_1H = "flux/downsample-1m-to-1h.flux";
+    private static final String FLUX_RESOURCE_1H = "flux/downsample-raw-to-1h.flux";
     private static final String FLUX_RESOURCE_1D = "flux/downsample-1h-to-1d.flux";
 
     private final InfluxDBClient client;
@@ -39,11 +36,9 @@ public class InfluxInitializer implements ApplicationRunner {
             String orgId = properties.org();
 
             createBucket(orgId, properties.buckets().raw(), 7 * 24 * 3600);
-            createBucket(orgId, properties.buckets().avg1m(), 30 * 24 * 3600);
             createBucket(orgId, properties.buckets().avg1h(), 365 * 24 * 3600);
             createBucket(orgId, properties.buckets().avg1d(), 0);
 
-            createTask(orgId, DOWNSAMPLE_1M, FLUX_RESOURCE_1M, "1m");
             createTask(orgId, DOWNSAMPLE_1H, FLUX_RESOURCE_1H, "1h");
             createTask(orgId, DOWNSAMPLE_1D, FLUX_RESOURCE_1D, "1d");
 

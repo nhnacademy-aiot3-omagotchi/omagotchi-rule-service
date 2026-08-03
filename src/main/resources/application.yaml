@@ -70,7 +70,6 @@ influx:
   org: ${INFLUXDB_ORG_ID:org}
   buckets:
     raw: omagotchi-raw
-    avg-1m: omagotchi-avg-1m
     avg-1h: omagotchi-avg-1h
     avg-1d: omagotchi-avg-1d
   batch:

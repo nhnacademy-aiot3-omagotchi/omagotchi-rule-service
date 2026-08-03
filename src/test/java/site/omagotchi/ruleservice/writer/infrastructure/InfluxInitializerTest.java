@@ -46,7 +46,7 @@ class InfluxInitializerTest {
         InfluxDbProperties properties = new InfluxDbProperties(
                 influx.getUrl(), TOKEN, orgId,
                 new InfluxDbProperties.Buckets(
-                        "omagotchi-raw", "omagotchi-avg-1m", "omagotchi-avg-1h", "omagotchi-avg-1d"),
+                        "omagotchi-raw", "omagotchi-avg-1h", "omagotchi-avg-1d"),
                 new InfluxDbProperties.Batch(1000, 1000)
         );
 
@@ -60,22 +60,22 @@ class InfluxInitializerTest {
     }
 
     @Test
-    @DisplayName("버킷 4개가 생성된다")
+    @DisplayName("버킷 3개가 생성된다")
     void createsBuckets() {
         List<String> names = client.getBucketsApi().findBuckets().stream()
                 .map(Bucket::getName).toList();
         assertTrue(names.containsAll(List.of(
-                        "omagotchi-raw", "omagotchi-avg-1m", "omagotchi-avg-1h", "omagotchi-avg-1d")),
+                        "omagotchi-raw", "omagotchi-avg-1h", "omagotchi-avg-1d")),
                 "생성된 버킷: " + names);
     }
 
     @Test
-    @DisplayName("다운샘플링 태스크 3개가 생성된다")
+    @DisplayName("다운샘플링 태스크 2개가 생성된다")
     void createsTasks() {
         List<String> taskNames = client.getTasksApi().findTasks().stream()
                 .map(Task::getName).toList();
         assertTrue(taskNames.containsAll(List.of(
-                        "omagotchi-downsample-1m", "omagotchi-downsample-1h", "omagotchi-downsample-1d")),
+                        "omagotchi-downsample-1h", "omagotchi-downsample-1d")),
                 "생성된 태스크: " + taskNames);
     }
 }

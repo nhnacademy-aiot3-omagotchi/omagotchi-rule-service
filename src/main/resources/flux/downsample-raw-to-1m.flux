@@ -1,6 +1,0 @@
-// raw → 1분 평균 (스케줄 every=1m은 태스크 메타데이터에 저장됨)
-from(bucket: "omagotchi-raw")
-    |> range(start: -1m)
-    |> filter(fn: (r) => r._field == "value")
-    |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
-    |> to(bucket: "omagotchi-avg-1m")

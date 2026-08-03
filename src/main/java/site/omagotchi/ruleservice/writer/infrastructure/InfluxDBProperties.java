@@ -12,7 +12,6 @@ public record InfluxDbProperties(
 ) {
     public record Buckets(
             String raw,
-            String avg1m,
             String avg1h,
             String avg1d
     ){}
