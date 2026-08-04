@@ -21,16 +21,19 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
     private static final long MIN_BACKOFF_MS = 200;
     private static final long MAX_BACKOFF_MS = 30_000;
 
-    private final int capacity;
     private final WriteApiBlocking writeApi;
     private final String orgId;
     private final String bucket;
     private final int batchSize;
     private final long flushIntervalMs;
 
-    /** raw 버킷 하나만 적재하므로 단일 큐 */
-    private final BlockingQueue<Point> queue = new LinkedBlockingQueue<>();
+    /** raw 버킷 하나만 적재하므로 단일 큐. 용량 제한 큐라 포화 시 offer가 원자적으로 거절된다 */
+    private final BlockingQueue<Point> queue;
     private Thread worker;
+
+    /** 쓰기 실패 배치. 큐에 재삽입하면 포화 시 이미 ACK된 데이터가 거절·유실될 수 있어
+     *  워커가 직접 보유하고 성공할 때까지 재시도한다 (워커 스레드 전용, stop()은 join 후 접근) */
+    private List<Point> pendingBatch;
 
     private volatile boolean running = false;
     private volatile boolean healthy = true;
@@ -46,21 +49,19 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         this.bucket = properties.buckets().raw();
         this.batchSize = properties.batch().size();
         this.flushIntervalMs = properties.batch().flushIntervalMs();
-        this.capacity = capacity;
+        this.queue = new LinkedBlockingQueue<>(capacity);
     }
 
-    /** 바로 쓰기를 하기보다는 배치를 위해 일단 버퍼에 적재 */
-    public void offer(Point point){
+    /**
+     * 바로 쓰기를 하기보다는 배치를 위해 일단 버퍼에 적재.
+     * 버퍼 포화 시 기존(이미 ACK된) 데이터를 보존하기 위해 신규 적재를 거절한다.
+     * @return 적재 성공 여부. false면 호출자가 해당 delivery를 재큐잉해야 한다
+     */
+    public boolean offer(Point point){
         if(point == null){
-            return;
+            return true;
         }
-
-        while(queue.size() >= capacity){
-            queue.poll();
-            log.warn("버퍼 포화 -> 폐기");
-        }
-
-        queue.offer(point);
+        return queue.offer(point);
     }
 
     /** 애플리케이션 가동 시 start() 호출, 데몬 스레드에서 runLoop() 실행 */
@@ -87,11 +88,17 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         }
     }
 
-    /** 버퍼에서 batchSize만큼 꺼내 쓴다 */
+    /** 보유 중인 실패 배치부터 재시도한 뒤, 버퍼에서 batchSize만큼 꺼내 쓴다 */
     private void drainAndWrite(){
-        List<Point> batch = new ArrayList<>(batchSize);
+        if(pendingBatch != null){
+            if(!writeWithRetry(pendingBatch)){
+                return; // 실패 배치가 성공하기 전엔 신규 배치를 진행하지 않음 (순서 보존)
+            }
+            pendingBatch = null;
+        }
 
         while(!queue.isEmpty()){
+            List<Point> batch = new ArrayList<>(batchSize);
             queue.drainTo(batch, batchSize);
 
             if(batch.isEmpty()){
@@ -99,10 +106,9 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
             }
 
             if(!writeWithRetry(batch)){
-                batch.forEach(this::offer);
+                pendingBatch = batch;
                 return;
             }
-            batch.clear();
         }
     }
 
@@ -111,7 +117,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         long backoff = MIN_BACKOFF_MS;
         for(int i = 1; i <= MAX_RETRY; i++){
             try{
-                writeApi.writePoints(bucket, orgId, batch); // 블로킹 - 완료 후 healthy 갱신
+                writeApi.writePoints(bucket, orgId, List.copyOf(batch)); // 블로킹 - 완료 후 healthy 갱신. 외부에 불변 스냅샷 전달
                 healthy = true;
                 return true;
             }catch (Exception e){
@@ -126,7 +132,7 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
                 backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
             }
         }
-        log.error("InfluxDB 쓰기 -> 버퍼에 보존");
+        log.error("InfluxDB 쓰기 실패 - 배치를 보유하고 다음 주기에 재시도");
         return false;
     }
 
@@ -156,6 +162,15 @@ public class InfluxDbBatchWriter implements SmartLifecycle {
         return running;
     }
 
+    /** 리스너 컨테이너(기본 phase=MAX_VALUE)보다 먼저 시작하고 나중에 종료되도록 낮은 phase 지정.
+     *  종료 시 리스너가 먼저 멈춰야 최종 flush 이후에 큐로 Point가 유입되지 않는다 */
+    @Override
+    public int getPhase() {
+        return 0;
+    }
+
+    /** 한계: 초기값이 true라 InfluxDB가 기동 시점부터 접속 불가여도 첫 쓰기 실패 전까지는
+     *  게이트를 통과해 ACK될 수 있다. ACK-후-영속화 전환(후속 PR)에서 해결 예정 */
     public boolean isHealthy(){
         return healthy;
     }

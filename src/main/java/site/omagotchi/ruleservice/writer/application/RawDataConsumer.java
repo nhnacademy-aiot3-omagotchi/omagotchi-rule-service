@@ -28,6 +28,7 @@ public class RawDataConsumer {
 
     private final Counter enqueued;
     private final Counter requeued;
+    private final Counter rejected;
     private final Counter failed;
 
     public RawDataConsumer(InfluxDbBatchWriter batchWriter,
@@ -36,6 +37,7 @@ public class RawDataConsumer {
         this.batchWriter = batchWriter;
         this.enqueued = registry.counter("influx.raw.consumed");
         this.requeued = registry.counter("influx.raw.requeued");
+        this.rejected = registry.counter("influx.raw.rejected");
         this.failed = registry.counter("influx.raw.failed");
     }
     @RabbitListener(
@@ -59,8 +61,13 @@ public class RawDataConsumer {
                 return;
             }
 
-            batchWriter.offer(toPoint(reading)); //논 블로킹 작업
-            channel.basicAck(tag, false);
+            if(!batchWriter.offer(toPoint(reading))){ // 버퍼 포화 - 브로커에 되돌려 백프레셔
+                channel.basicNack(tag, false, true);
+                rejected.increment();
+                return;
+            }
+
+            channel.basicAck(tag, false); // 메모리 버퍼 적재 시점 ACK (영속화 전) - 후속 PR에서 ACK-후-영속화로 전환 예정
             enqueued.increment();
 
         }catch (Exception e){ //메세지 자체를 처리못함 (재전송이 의미가 없음) DLQ 전송
