@@ -1,0 +1,91 @@
+package site.omagotchi.ruleservice.writer.application;
+
+
+import com.influxdb.client.domain.WritePrecision;
+import com.influxdb.client.write.Point;
+import com.rabbitmq.client.Channel;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.stereotype.Component;
+import site.omagotchi.ruleservice.inbound.domain.SensorReading;
+import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
+import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbBatchWriter;
+
+import java.io.IOException;
+/**
+ * raw메세지 소비자
+ * 해당 메세지를 소비함과 동시에 InfluxDbBatchWriter를 사용해서 Influx쓰기 실행*/
+@Slf4j
+@Component
+public class RawDataConsumer {
+
+    private final InfluxDbBatchWriter batchWriter;
+
+    private final Counter enqueued;
+    private final Counter requeued;
+    private final Counter rejected;
+    private final Counter failed;
+
+    public RawDataConsumer(InfluxDbBatchWriter batchWriter,
+                           MeterRegistry registry){
+
+        this.batchWriter = batchWriter;
+        this.enqueued = registry.counter("influx.raw.consumed");
+        this.requeued = registry.counter("influx.raw.requeued");
+        this.rejected = registry.counter("influx.raw.rejected");
+        this.failed = registry.counter("influx.raw.failed");
+    }
+    @RabbitListener(
+            queues = RabbitTopologyConfig.QUEUE_RAW, // raw 큐에 메세지가 적재된다면
+            concurrency = "2-8", //2~8개의 쓰레드를 사용해
+            ackMode = "MANUAL" // 수동 ack모드를 통해 메세지를 소비
+    )
+    public void consume(
+            SensorReading reading,
+            Channel channel,
+            @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException { // tag=메세지의 순번. 수동 ack모드에서 필요함.
+
+        if(reading.traceId() != null){
+            MDC.put("traceId", reading.traceId());
+        }
+
+        try{
+            if(!batchWriter.isHealthy()){ // InfluxDB 장애. raw 큐에 재적재
+                channel.basicNack(tag, false, true);
+                requeued.increment();
+                return;
+            }
+
+            if(!batchWriter.offer(toPoint(reading))){ // 버퍼 포화 - 브로커에 되돌려 백프레셔
+                channel.basicNack(tag, false, true);
+                rejected.increment();
+                return;
+            }
+
+            channel.basicAck(tag, false); // 메모리 버퍼 적재 시점 ACK (영속화 전) - 후속 PR에서 ACK-후-영속화로 전환 예정
+            enqueued.increment();
+
+        }catch (Exception e){ //메세지 자체를 처리못함 (재전송이 의미가 없음) DLQ 전송
+            failed.increment();
+            log.error("raw 소비 실패 -> DLQ, deviceEui={}, measurment={}", reading.deviceEui(), reading.measurement(), e);
+            channel.basicNack(tag, false, false);
+        }finally{
+            MDC.remove("traceId");
+        }
+    }
+
+    private Point toPoint(SensorReading reading){
+        return Point.measurement(reading.measurement())
+                .addTag("device_eui", reading.deviceEui())
+                .addTag("location", reading.location())
+                .addTag("point", reading.point())
+                .addField("value", reading.value())
+                .addField("received_at", reading.receivedAt().toEpochMilli())
+                .time(reading.measuredAt(), WritePrecision.MS);
+    }
+}

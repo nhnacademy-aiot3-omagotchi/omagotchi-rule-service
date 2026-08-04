@@ -64,6 +64,22 @@ sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
 
+influx:
+  url: ${INFLUXDB_URL:http://localhost:8086}
+  token: ${INFLUXDB_TOKEN:token}
+  org: ${INFLUXDB_ORG_ID:org}
+  buckets:
+    raw: omagotchi-raw
+    avg-1h: omagotchi-avg-1h
+    avg-1d: omagotchi-avg-1d
+  retention:
+    raw-days: 7
+    avg-1h-days: 365
+    avg-1d-days: 0
+  batch:
+    size: 1000
+    flush-interval-ms: 1000
+
 quality:
   ranges:
     temperature:
