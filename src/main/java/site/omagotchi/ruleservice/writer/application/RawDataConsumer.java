@@ -34,7 +34,7 @@ public class RawDataConsumer {
                            MeterRegistry registry){
 
         this.batchWriter = batchWriter;
-        this.enqueued = registry.counter("influx.raw.cousumed");
+        this.enqueued = registry.counter("influx.raw.consumed");
         this.requeued = registry.counter("influx.raw.requeued");
         this.failed = registry.counter("influx.raw.failed");
     }
