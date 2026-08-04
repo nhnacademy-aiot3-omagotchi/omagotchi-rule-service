@@ -2,6 +2,10 @@ server:
   port: ${SERVER_PORT:8081}
 
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 2 # 1개가 원래 기본값
   application:
     name: rule-service
   rabbitmq:
