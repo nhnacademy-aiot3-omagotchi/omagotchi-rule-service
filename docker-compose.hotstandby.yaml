@@ -1,0 +1,37 @@
+# docker-compose.hotstandby.yml
+# Part J 검증용 - engine-a/engine-b 두 인스턴스를 로컬에서 동시에 띄워
+# Eureka 등록·상호 발견이 정상 동작하는지 확인하기 위한 로컬 전용 구성
+# 실제 서버 배포(discovery-service, RabbitMQ, MQTT 등 학교 제공 인프라)와는 별개
+
+services:
+  engine-a:
+    build: .
+    image: omagotchi-rule-service:hotstandby-local
+    env_file: .env
+    environment:
+      SERVER_PORT: 8081
+      ENGINE_ID: engine-a
+      ENGINE_PRIORITY: 1
+      SENSOR_CLIENT_ID: rule-engine-1
+      EUREKA_ENABLED: "true"
+      EUREKA_URL: http://host.docker.internal:8761/eureka/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8081:8081"
+
+  engine-b:
+    build: .
+    image: omagotchi-rule-service:hotstandby-local
+    env_file: .env
+    environment:
+      SERVER_PORT: 8082
+      ENGINE_ID: engine-b
+      ENGINE_PRIORITY: 2
+      SENSOR_CLIENT_ID: rule-engine-2
+      EUREKA_ENABLED: "true"
+      EUREKA_URL: http://host.docker.internal:8761/eureka/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8082:8082"
