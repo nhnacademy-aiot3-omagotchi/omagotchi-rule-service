@@ -6,3 +6,6 @@ GET http://localhost:8081/actuator/metrics/mqtt.messages.received?tag=topicFilte
 
 ### modbus만
 GET http://localhost:8081/actuator/metrics/mqtt.messages.received?tag=topicFilter:modbus/#
+
+### /self
+GET http://localhost:8081/api/v1/engines/self
