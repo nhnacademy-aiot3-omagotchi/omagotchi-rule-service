@@ -89,13 +89,15 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     .retrieve()
                     .body(PeerSelfInfo.class);
 
+            PresenceStatus previousStatus = this.resolvePreviousStatus(peerEngineId);
+
             this.knownEngines.put(peerEngineId, new EngineInfo(
                     response.engineId(),
                     instance.getHost(),
                     instance.getPort(),
                     response.priority(),
                     response.startedAt(),
-                    PresenceStatus.ONLINE
+                    previousStatus // presenceStatus 판정·로깅은 judgePresence()가 전달
             ));
 
             this.lastPolledSuccessAt.put(peerEngineId, System.currentTimeMillis());
@@ -110,9 +112,17 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     instance.getPort(),
                     parsePriority(instance.getMetadata().get("engine-priority")),
                     0L, // startedAt
-                    PresenceStatus.ONLINE
+                    PresenceStatus.ONLINE // 첫 발견 유예
             ));
         }
+    }
+
+    private PresenceStatus resolvePreviousStatus(String peerEngineId) {
+        EngineInfo existing = this.knownEngines.get(peerEngineId);
+
+        return Objects.nonNull(existing)
+                ? existing.presenceStatus()
+                : PresenceStatus.ONLINE; // 첫 발견 유예
     }
 
     private void judgePresence() {
