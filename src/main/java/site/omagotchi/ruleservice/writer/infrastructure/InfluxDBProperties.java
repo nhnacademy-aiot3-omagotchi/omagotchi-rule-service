@@ -8,7 +8,6 @@ public record InfluxDbProperties(
    String token,
    String org,
    Buckets buckets,
-   Batch batch,
    Retention retention
 ) {
     public record Buckets(
@@ -22,11 +21,5 @@ public record InfluxDbProperties(
             int avg1hDays,
             int avg1dDays
     ){}
-
-    public record Batch(
-            int size,
-            long flushIntervalMs
-    ){}
-
 
 }
