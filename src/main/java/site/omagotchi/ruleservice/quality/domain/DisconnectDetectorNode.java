@@ -19,6 +19,9 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class DisconnectDetectorNode extends AbstractNode {
 
+    private static final String DETAIL_START = "끊김 시작";
+    private static final String DETAIL_END = "끊김 종료";
+
     private final LastSeenRegistry lastSeenRegistry;
     private final QualityProperties qualityProperties;
 
@@ -50,7 +53,7 @@ public class DisconnectDetectorNode extends AbstractNode {
     @Override
     public void shutdown() {
         if (scheduledExecutorService != null) {
-            scheduledExecutorService.shutdownNow();
+            scheduledExecutorService.shutdown();
         }
         super.shutdown();
     }
@@ -83,22 +86,25 @@ public class DisconnectDetectorNode extends AbstractNode {
                 isDisconnect = sinceLastSeen.compareTo(threshold) > 0;   // 임계값 넘게 안 옴 → 결측
             }
 
-            String key = deviceEui + ":" + measurement;
+            String key = key(deviceEui, measurement);
             boolean wasDisconnect = disconnectKeys.contains(key);
 
             if (isDisconnect && !wasDisconnect) {
-                //끊김 시작
                 disconnectKeys.add(key);
-                log.info("[끊김 시작] {}", key);
-                QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui,measurement,"끊김 시작");
-                send("disconnect",Message.of(Map.of("qualityEvent", qualityEvent)));
+                log.info("[{}] {}", DETAIL_START, key);
+                QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui, measurement, DETAIL_START);
+                send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
+
             } else if (!isDisconnect && wasDisconnect) {
-                //끊김 종료
                 disconnectKeys.remove(key);
-                log.info("[끊김 종료] {}", key);
-                QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui,measurement,"끊김 종료");
-                send("disconnect",Message.of(Map.of("qualityEvent", qualityEvent)));
+                log.info("[{}] {}", DETAIL_END, key);
+                QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui, measurement, DETAIL_END);
+                send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
             }
         }
+    }
+
+    private static String key(String deviceEui, String measurement) {
+        return deviceEui + ":" + measurement;
     }
 }

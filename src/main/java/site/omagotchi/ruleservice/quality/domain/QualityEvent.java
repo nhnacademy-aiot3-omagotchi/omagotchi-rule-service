@@ -63,6 +63,10 @@ public record QualityEvent(
         );
     }
 
+    /** 끊김 이벤트는 특정 메시지에 대한 응답이 아니라 타이머(DisconnectDetectorNode.check())가
+     *  주기적으로 만들어내는 이벤트라 traceId가 의도적으로 null이다.
+     *  발행 헤더의 traceId는 이 값이 아니라 Message가 자체 발급한 UUID를 쓰므로
+     *  (RabbitPublisherNode.publish() 참고) 다운스트림에 null이 흐르지 않는다. */
     public static QualityEvent disconnected(String deviceEui, String measurement, String detail) {
         return new QualityEvent(
                 1,

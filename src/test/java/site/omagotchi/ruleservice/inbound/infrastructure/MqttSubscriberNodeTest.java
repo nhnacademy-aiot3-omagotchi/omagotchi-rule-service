@@ -28,7 +28,7 @@ public class MqttSubscriberNodeTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         node = new MqttSubscriberNode(
-                "mqtt-sub", "tcp://data.withIO.net:1883", CLIENT_ID, null, null, TOPIC_FILTER, meterRegistry);
+                "mqtt-sub", "tcp://localhost:1883", CLIENT_ID, null, null, TOPIC_FILTER, meterRegistry);
 
         out = new RecordingConnection();
         node.getOutputPort("out").connect(out);

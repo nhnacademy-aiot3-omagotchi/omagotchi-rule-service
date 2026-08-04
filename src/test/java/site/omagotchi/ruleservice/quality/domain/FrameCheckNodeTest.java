@@ -203,4 +203,41 @@ class FrameCheckNodeTest {
         assertThat((Boolean) out.messages().get(0).get("_delayed")).isTrue();
         assertThat(delayed.messages()).hasSize(1);
     }
+    
+    //리뷰 대응 - 프레임 단위 추적, 리셋 확정, 갭 상한
+    @Test
+    @DisplayName("프레임마다 object 구성이 달라도(battery 간헐 전송) 결측 오탐이 없다 - 프레임 단위 추적")
+    void noFalseMissingWhenFieldAbsentFromSomeFramesTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 100L));
+        node.process(message("battery", 92.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 101L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(120), BASE.plusSeconds(120), 102L));
+
+        assertThat(out.messages()).hasSize(3);
+        assertThat(missing.messages()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("낮은 fCnt가 두 프레임 연속 이어지면 리셋으로 확정하고 이후 결측 감지가 정상 동작한다")
+    void resetConfirmedByTwoConsecutiveLowFramesTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 94794L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 0L));   // 역전 후보
+        node.process(message("co2", 652.0, BASE.plusSeconds(120), BASE.plusSeconds(120), 1L)); // 리셋 확정
+        node.process(message("co2", 653.0, BASE.plusSeconds(180), BASE.plusSeconds(180), 3L)); // fCnt 2 누락
+
+        assertThat(out.messages()).hasSize(4);
+        assertThat(missing.messages()).hasSize(1);   // 리셋 이후에도 결측 감지가 살아있다
+        QualityEvent event = missing.messages().get(0).get("qualityEvent");
+        assertThat(event.detail()).isEqualTo("결측: fCnt 2 누락");
+    }
+
+    @Test
+    @DisplayName("갭이 상한을 넘으면 개별 신고 대신 요약 1건으로 발행한다")
+    void hugeGapSummarizedInSingleEventTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 100L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 200L));
+
+        assertThat(missing.messages()).hasSize(1);
+        QualityEvent event = missing.messages().get(0).get("qualityEvent");
+        assertThat(event.detail()).isEqualTo("결측: fCnt 101~199 누락 (99건)");
+    }
 }

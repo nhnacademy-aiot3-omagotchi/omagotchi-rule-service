@@ -54,7 +54,8 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
             mqttConnectionOptions.setCleanStart(false);
             //연결 끊긴 뒤 몇 초까지 세션을 브로커가 기억해줄지
             mqttConnectionOptions.setSessionExpiryInterval(600L);
-            if (username != null && !username.isBlank()) {
+            
+            if (username != null && !username.isBlank() && password != null) {
                 mqttConnectionOptions.setUserName(username);
                 mqttConnectionOptions.setPassword(password.getBytes(StandardCharsets.UTF_8));
             }
@@ -65,7 +66,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback {
             //브로커 연결 시도
             mqttAsyncClient.connect(mqttConnectionOptions).waitForCompletion();
             //토픽으로 구독 신청
-            mqttAsyncClient.subscribe(topicFilter, 1);
+            mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
 
         } catch (MqttException e) {
             log.error("[{}] MQTT 초기화 실패 (brokerUrl={})", getId(), brokerUrl, e);
