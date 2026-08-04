@@ -1,20 +1,13 @@
 {
   "id": "inbound-flow",
   "name": "인바운드 파이프라인",
-  "description": "MQTT 수신 -> 정규화 -> 수집 (C-2/C-4 실센서 관찰용)",
+  "description": "MQTT 수신(ChirpStack 직결) -> 정규화 -> 수집 (C-2/C-4 실센서 관찰용)",
   "nodes": [
     {
       "id": "mqtt-sub",
       "type": "MqttSubscriber",
       "config": {
-        "topicFilter": "iot/#"
-      }
-    },
-    {
-      "id": "mqtt-sub-modbus",
-      "type": "MqttSubscriber",
-      "config": {
-        "topicFilter": "modbus/#"
+        "topicFilter": "application/+/device/+/event/up"
       }
     },
     {
@@ -31,10 +24,6 @@
   "connections": [
     {
       "from": "mqtt-sub:out",
-      "to": "normalizer:in"
-    },
-    {
-      "from": "mqtt-sub-modbus:out",
       "to": "normalizer:in"
     },
     {

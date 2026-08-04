@@ -105,6 +105,6 @@ class RabbitPublisherNodeTest {
     private SensorReading sampleReading() {
         return new SensorReading(
                 "trace-1", "livingroom", "point-a", "eui-123",
-                "temperature", 30.0, Instant.now(), Instant.now(), "온도센서");
+                "temperature", 30.0, Instant.now(), Instant.now(), "온도센서",1L);
     }
 }

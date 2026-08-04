@@ -63,6 +63,8 @@ auth:
 sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
+  username: ${SENSOR_USERNAME:}
+  password: ${SENSOR_PASSWORD:}
 
 influx:
   url: ${INFLUXDB_URL:http://localhost:8086}
@@ -132,9 +134,7 @@ quality:
     - deviceEui: "24e124725d089152"
       measurement: "temperature"
       expectedIntervalSeconds: 600
-    - deviceEui: "modbus"
-      measurement: "temperature"
-      expectedIntervalSeconds: 5
+
 
 # 로그 패턴에 두 MDC값 모두 노출
 # requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.
