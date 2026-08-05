@@ -2,6 +2,7 @@ package site.omagotchi.ruleservice.recovery.infrastructure;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.rabbit.retry.RepublishMessageRecoverer;
@@ -13,6 +14,7 @@ import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
  * 재시도 3회 후 <code>dlx -> dlq</code>로 보내는 과정. <br/>
  * 원인에 대한 헤더를 추가해서 메세지를 보낸다.
  */
+@Slf4j
 @Configuration
 public class RabbitRecoverConfig {
 
@@ -25,6 +27,10 @@ public class RabbitRecoverConfig {
 
         return ((message, cause) -> {
             dlqCounter.increment();
+            log.error("재시도 소진 -> DLQ 이관. routingKey={}, traceId={}",
+                    message.getMessageProperties().getReceivedRoutingKey(),
+                    message.getMessageProperties().getHeader("traceId"),
+                    cause);
             delegate.recover(message, cause);
         });
     }

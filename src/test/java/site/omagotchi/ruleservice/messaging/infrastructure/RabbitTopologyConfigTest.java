@@ -23,10 +23,10 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 /** 실제 환경을 testContainer로 확인 (통합 x)*/
 @Slf4j
-@SpringBootTest
 @Import(TestJwtKeyConfig.class)
 @ActiveProfiles("test")
 @ImportAutoConfiguration(RabbitAutoConfiguration.class)
+@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 class RabbitTopologyConfigTest {
 
     @Container
