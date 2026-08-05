@@ -72,6 +72,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
     @Scheduled(fixedDelay = 3, timeUnit = TimeUnit.SECONDS)
     public void pollPeers() {
+        boolean discoveredNewPeer = false;
+
         try {
             for (ServiceInstance instance : this.discoveryClient.getInstances(this.applicationName)) {
                 String peerEngineId = instance.getMetadata().get("engine-id");
@@ -80,13 +82,22 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     continue;
                 }
 
+                // "새 피어 발견"을 별도로 감지해서 항상 알림
+                if (!this.knownEngines.containsKey(peerEngineId)) {
+                    discoveredNewPeer = true; // 처음 보는 피어 - 상태와 무관하게 존재 자체를 알려야 함
+                }
+
                 this.pollOne(peerEngineId, instance);
             }
         } catch (Exception e) {
             log.warn("Eureka 피어 목록 조회 실패 - 이번 주기는 건너뜁니다", e);
         }
 
-        this.judgePresence(); // Eureka 조회가 실패해도 이미 알고 있는 피어는 계속 판
+        boolean statusChanged = this.judgePresence();
+
+        if (discoveredNewPeer || statusChanged) {
+            this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
+        }
     }
 
     private void pollOne(String peerEngineId, ServiceInstance instance) {
@@ -132,7 +143,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 : PresenceStatus.ONLINE; // 첫 발견 유예
     }
 
-    private void judgePresence() {
+    private boolean judgePresence() {
         long now = System.currentTimeMillis();
         boolean changed = false;
 
@@ -159,9 +170,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             }
         }
 
-        if (changed) {
-            this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
-        }
+        return changed; // 알림을 직접 보내지 않고, "값이 바뀌었는지"만 불리언으로 리턴
     }
 
     private static int parsePriority(String value) {
