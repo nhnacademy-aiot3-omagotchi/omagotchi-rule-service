@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
@@ -26,6 +27,11 @@ import java.util.List;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+        name = "eureka.client.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class EngineRoleService implements EnginePresenceListener {
 
     private static final long INITIAL_WAIT_MS = 15_000L;

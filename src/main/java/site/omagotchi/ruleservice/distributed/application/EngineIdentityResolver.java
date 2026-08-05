@@ -3,6 +3,7 @@ package site.omagotchi.ruleservice.distributed.application;
 import com.netflix.appinfo.EurekaInstanceConfig;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
@@ -15,6 +16,11 @@ import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
  * - 다른 엔진이 Eureka로 나를 찾아올 때 쓰는 주소와 어긋나면 안 되기 떄문
  */
 @Component
+@ConditionalOnProperty(
+        name = "eureka.client.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class EngineIdentityResolver {
 
     @Getter

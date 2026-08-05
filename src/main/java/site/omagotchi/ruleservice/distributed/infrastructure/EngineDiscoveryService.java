@@ -2,6 +2,7 @@ package site.omagotchi.ruleservice.distributed.infrastructure;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Lazy;
@@ -25,6 +26,11 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(
+        name = "eureka.client.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class EngineDiscoveryService implements EngineDirectoryPort {
 
     private static final long OFFLINE_THRESHOLD_MS = 12_000L;
