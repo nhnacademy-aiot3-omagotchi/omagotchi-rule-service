@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.quality.domain.QualityEvent;
-import site.omagotchi.ruleservice.quality.domain.LastSeenRegistry;
 import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +32,7 @@ public class MissingDetectorNodeTest {
         node.getOutputPort("missing").connect(missing);
 
         node.initialize();
+        node.activate(); // Activatable 적용 후 - 실제 검사가 시작되려면 필요
     }
 
     @AfterEach
@@ -100,6 +99,7 @@ public class MissingDetectorNodeTest {
         RecordingConnection missing2 = new RecordingConnection();
         node2.getOutputPort("missing").connect(missing2);
         node2.initialize();
+        node2.activate();
 
         Instant twentySecondsAgo = Instant.now().minusSeconds(20);
         registry.update("fast", "temperature", twentySecondsAgo);

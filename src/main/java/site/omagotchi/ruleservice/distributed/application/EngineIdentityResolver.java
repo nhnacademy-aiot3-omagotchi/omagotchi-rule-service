@@ -25,7 +25,7 @@ public class EngineIdentityResolver {
                                   @Value("${server.port}") int port) {
 
         this.self = new EngineInfo(
-                engineProperties.id(), // engindId
+                engineProperties.id(), // engineId
                 eurekaInstanceConfig.getIpAddress(), // host
                 port,
                 engineProperties.priority(), // priority
