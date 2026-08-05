@@ -36,7 +36,8 @@ public class EngineIdentityResolver {
                 port,
                 engineProperties.priority(), // priority
                 System.currentTimeMillis(), // startedAt
-                PresenceStatus.SELF // presenceStatus
+                PresenceStatus.SELF, // presenceStatus
+                null // engineRole - 기동 시점엔 아직 판정 전이라 항상 null, 응답 조립 시 EngineRoleService.getCurrentRole()로 덮어씀
         );
     }
 }
