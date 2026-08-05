@@ -8,7 +8,8 @@ public record EngineInfo(
         int port,
         int priority,
         long startedAt,
-        PresenceStatus presenceStatus
+        PresenceStatus presenceStatus,
+        EngineRole engineRole // 자기 자신 항목은 항상 null로 두고 응답 조립 시점에 덮어쓰는 것이 의도된 동작 (nullable - 검증X)
 ) {
     public EngineInfo {
         if (Objects.isNull(engineId) || engineId.isBlank()) {
@@ -21,6 +22,6 @@ public record EngineInfo(
     }
 
     public EngineInfo withPresenceStatus(PresenceStatus newPresenceStatus) {
-        return new EngineInfo(engineId, host, port, priority, startedAt, newPresenceStatus);
+        return new EngineInfo(engineId, host, port, priority, startedAt, newPresenceStatus, engineRole);
     }
 }
