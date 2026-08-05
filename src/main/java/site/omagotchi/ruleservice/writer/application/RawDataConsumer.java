@@ -40,7 +40,7 @@ public class RawDataConsumer {
             writeApi.writePoint(bucket, orgId, toPoint(reading));
             consumed.increment();
         }catch (Exception e){
-            log.error("raw 쓰기 실패 -> 재시도/DLQ, deviceEui={}, measurment={}", reading.deviceEui(), reading.measurement(), e);
+            log.error("raw 쓰기 실패 -> 재시도/DLQ, deviceEui={}, measurement={}", reading.deviceEui(), reading.measurement(), e);
             throw e;
         }finally {
             MDC.remove("traceId");
