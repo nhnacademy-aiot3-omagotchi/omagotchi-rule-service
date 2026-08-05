@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
 import site.omagotchi.ruleservice.distributed.application.port.EnginePresenceListener;
 import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
+import site.omagotchi.ruleservice.distributed.domain.EngineRole;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 
 import java.util.List;
@@ -115,7 +116,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     instance.getPort(),
                     response.priority(),
                     response.startedAt(),
-                    previousStatus // presenceStatus 판정·로깅은 judgePresence()가 전달
+                    previousStatus, // presenceStatus 판정·로깅은 judgePresence()가 전달,
+                    response.engineRole() // 폴링 성공 시엔 피어가 방금 보고한 engineRole 그대로 반영
             ));
 
             this.lastPolledSuccessAt.put(peerEngineId, System.currentTimeMillis());
@@ -130,7 +132,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     instance.getPort(),
                     parsePriority(instance.getMetadata().get("engine-priority")),
                     0L, // startedAt
-                    PresenceStatus.ONLINE // 첫 발견 유예
+                    PresenceStatus.ONLINE, // 첫 발견 유예
+                    null // 폴링 실패라 engineRole을 아직 모름
             ));
         }
     }
@@ -186,7 +189,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             String host,
             int port,
             int priority,
-            long startedAt
+            long startedAt,
+            EngineRole engineRole
     ) {
     }
 }
