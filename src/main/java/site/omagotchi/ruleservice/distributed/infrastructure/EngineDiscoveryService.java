@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -44,7 +45,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                                   RestClient enginePollingRestClient,
                                   @Value("${spring.application.name}") String applicationName,
                                   @Value("${engine.id}") String selfEngineId,
-                                  List<EnginePresenceListener> enginePresenceListeners) {
+                                  @Lazy List<EnginePresenceListener> enginePresenceListeners) {
 
         this.discoveryClient = discoveryClient;
         this.enginePollingRestClient = enginePollingRestClient;
