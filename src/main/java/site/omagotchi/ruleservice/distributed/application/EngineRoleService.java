@@ -18,7 +18,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
-
 /**
  * 정적 우선순위 규칙으로 ACTIVE/STANDBY 역할을 판정하고, Activatable 노드에 activate()/deactivate() 지시
  * 규칙: 나보다 우선순위가 높은(priority 값이 낮은) 피어가 하나라도 ONLINE이면 STANDBY, 아니면 ACTIVE
@@ -49,7 +48,7 @@ public class EngineRoleService implements EnginePresenceListener {
     public EngineRoleService(EngineDirectoryPort engineDirectoryPort,
                              EngineProperties engineProperties,
                              FlowManager flowManager,
-                             TaskScheduler taskScheduler,
+                             @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") TaskScheduler taskScheduler, // IDE 오탐 이슈로 붙임.
                              Clock clock) {
 
         this.engineDirectoryPort = engineDirectoryPort;

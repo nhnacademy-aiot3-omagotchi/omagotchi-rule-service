@@ -127,6 +127,34 @@ class EngineRoleServiceTest {
         verify(this.activatable, times(1)).activate(); // 두 번 호출되면 안 됨.
     }
 
+    @Test
+    @DisplayName("우선순위가 같으면 engineId 사전순이 빠른 쪽이 ACTIVE로 판정된다")
+    void samePriorityTiesBrokenByEngineIdLexicographicOrder() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-z", 1, PresenceStatus.ONLINE) // 같은 priority(1), engineId만 "engine-a"보다 사전순으로 위
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // "engine-a" < "engine-b" -> a가 우선
+    }
+
+    @Test
+    @DisplayName("우선순위가 같고 상대 engineId가 사전순으로 앞서면 STANDBY로 판정된다")
+    void samePriorityLosesToLexicographicallyEarlierPeer() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE) // 같은 priority(1), "engine-a"보다 사전순으로 앞섬
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+    }
+
     private static EngineInfo peer(String engineId, int priority, PresenceStatus presenceStatus) {
         return new EngineInfo(
                 engineId,
