@@ -20,7 +20,7 @@ public class MissingDetectorNodeTest {
     private RecordingConnection missing;
 
     @BeforeEach
-    void setUp(){
+    void setUp() {
         registry = new LastSeenRegistry();
 
         QualityProperties properties = new QualityProperties(
@@ -112,5 +112,32 @@ public class MissingDetectorNodeTest {
         assertThat(event.deviceEui()).isEqualTo("fast");
 
         node2.shutdown();
+    }
+
+    @Test
+    @DisplayName("deactivate 후 다시 activate 하면 결측 상태가 초기화되어 다시 신고한다")
+    void resetsStateAfterDeactivateThenReactivate() {
+        this.registry.update("eui-1", "temperature", Instant.now().minusSeconds(300));
+
+        this.node.check(); // 첫 결측 신고
+        assertThat(this.missing.messages()).hasSize(1);
+
+        this.node.deactivate(); // STANDBY 전환 (missingSensors 초기화되어야 함)
+        this.node.activate(); // 다시 ACTIVE 전환
+
+        this.node.check(); // registry 상태는 그대로(여전히 결측 상황)인데, 내부 상태가 리셋됐으니 다시 신고해야 햄
+
+        assertThat(this.missing.messages()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("activate 전이거나 이미 deactivate된 상태에서 deactivate를 호출해도 예외 안 던진다")
+    void deactivateIsSafeWhenNotActivated() {
+        MissingDetectorNode freshNode = new MissingDetectorNode("fresh", this.registry, new QualityProperties(Map.of(), List.of()));
+        freshNode.initialize();
+
+        freshNode.deactivate(); // activate 호출 전
+
+        freshNode.shutdown();
     }
 }
