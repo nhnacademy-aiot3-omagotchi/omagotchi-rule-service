@@ -64,7 +64,6 @@ public class SecurityErrorResponseHandler implements AuthenticationEntryPoint, A
             String path
     ) throws IOException {
         ApiErrorResponse body = new ApiErrorResponse(
-                response.getStatus(),
                 errorCode.code(),
                 errorCode.message(),
                 path,
