@@ -26,7 +26,6 @@ spring:
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
     publisher-confirm-type: correlated
-#    publisher-returns: true # routqueue를 만들지 않고 해당 옵션으로 콜백 메서드 처리도 되는듯
 
 # RestClientConfig에서 Core API
 core:

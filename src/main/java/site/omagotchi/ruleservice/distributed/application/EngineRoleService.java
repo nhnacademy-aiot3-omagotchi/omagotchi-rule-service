@@ -2,7 +2,6 @@ package site.omagotchi.ruleservice.distributed.application;
 
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
@@ -15,6 +14,7 @@ import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
@@ -26,7 +26,6 @@ import java.util.List;
  */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 @ConditionalOnProperty(
         name = "eureka.client.enabled",
         havingValue = "true",
@@ -40,11 +39,26 @@ public class EngineRoleService implements EnginePresenceListener {
     private final EngineProperties engineProperties;
     private final FlowManager flowManager;
     private final TaskScheduler taskScheduler;
-    private final long startedAt = System.currentTimeMillis();
+    private final Clock clock;
+    private final long startedAt;
 
     // 첫 역할 결정 전까지는 널 - 이 동안 모든 Activatable 노드는 기본값(비활성) 유지
     @Getter
     private volatile EngineRole currentRole;
+
+    public EngineRoleService(EngineDirectoryPort engineDirectoryPort,
+                             EngineProperties engineProperties,
+                             FlowManager flowManager,
+                             TaskScheduler taskScheduler,
+                             Clock clock) {
+
+        this.engineDirectoryPort = engineDirectoryPort;
+        this.engineProperties = engineProperties;
+        this.flowManager = flowManager;
+        this.taskScheduler = taskScheduler;
+        this.clock = clock;
+        this.startedAt = this.clock.millis();
+    }
 
     /**
      * 기동 초기 대기가 끝나는 시점에 첫 역할 판정을 강제로 한 번 실행
@@ -54,7 +68,7 @@ public class EngineRoleService implements EnginePresenceListener {
     public void scheduleInitialEvaluation() {
         this.taskScheduler.schedule(
                 this::reevaluate,
-                Instant.now().plusMillis(INITIAL_WAIT_MS)
+                Instant.now(this.clock).plusMillis(INITIAL_WAIT_MS)
         );
     }
 
@@ -63,8 +77,9 @@ public class EngineRoleService implements EnginePresenceListener {
         this.reevaluate();
     }
 
-    private synchronized void reevaluate() {
-        if (System.currentTimeMillis() - this.startedAt < INITIAL_WAIT_MS) {
+    // package-private (테스트 클래스에서 @PostConstruct 스케줄링을 기다리지 않고 직접 호출해서 검증할 수 있도록)
+    synchronized void reevaluate() {
+        if (this.clock.millis() - this.startedAt < INITIAL_WAIT_MS) {
             log.debug("기동 초기 대기 중 - 역할 판정 보류");
             return;
         }
