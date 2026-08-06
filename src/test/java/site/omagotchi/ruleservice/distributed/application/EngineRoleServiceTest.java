@@ -1,0 +1,140 @@
+package site.omagotchi.ruleservice.distributed.application;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.scheduling.TaskScheduler;
+import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
+import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
+import site.omagotchi.ruleservice.distributed.domain.EngineRole;
+import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
+import site.omagotchi.ruleservice.flow.application.FlowManager;
+import site.omagotchi.ruleservice.flow.domain.node.Activatable;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
+class EngineRoleServiceTest {
+
+    private static final long INITIAL_WAIT_MS = 15_000L;
+
+    private EngineDirectoryPort engineDirectoryPort;
+    private EngineProperties engineProperties;
+    private FlowManager flowManager;
+    private TaskScheduler taskScheduler;
+    private MutableClock clock;
+
+    private Activatable activatable;
+
+    @BeforeEach
+    void setUp() {
+        this.engineDirectoryPort = mock(EngineDirectoryPort.class);
+        this.engineProperties = new EngineProperties("engine-a", 1);
+        this.flowManager = mock(FlowManager.class);
+        this.taskScheduler = mock(TaskScheduler.class);
+        this.clock = new MutableClock(Instant.now());
+
+        this.activatable = mock(Activatable.class);
+
+        when(this.flowManager.getActivatableNodes()).thenReturn(List.of(this.activatable));
+    }
+
+    private EngineRoleService newService() {
+        return new EngineRoleService(
+                this.engineDirectoryPort,
+                this.engineProperties,
+                this.flowManager,
+                this.taskScheduler,
+                this.clock
+        );
+    }
+
+    @Test
+    @DisplayName("초기 대기 중에는 역할을 판정하지 않는다")
+    void doNotEvaluateWhenInitWait() {
+        EngineRoleService engineRoleService = this.newService();
+
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS - 1));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isNull();
+        verify(this.activatable, times(0)).activate();
+        verify(this.activatable, times(0)).deactivate();
+    }
+
+    @Test
+    @DisplayName("자신보다 우선순위가 높은 피어가 없으면 ACTIVE로 판정한다")
+    void higherPriorityThenSelfEvaluateActive() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", 2, PresenceStatus.ONLINE) // priority 2 -> 나(1)보다 낮은 우선순위
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(this.activatable, times(1)).activate();
+        verify(this.activatable, times(0)).deactivate();
+    }
+
+    @Test
+    @DisplayName("자신보다 우선순위가 높은 피어가 ONLINE이면 STANDBY로 판정한다")
+    void higherPriorityIsOnlineThenEvaluateStandby() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", 0, PresenceStatus.ONLINE) // priority 0 - 나(1)보다 높은 우선순위
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.activatable, times(0)).activate();
+        verify(this.activatable, times(1)).deactivate();
+    }
+
+    @Test
+    @DisplayName("우선순위 높은 피어가 OFFLINE이면 판정에서 제외된다")
+    void higherPriorityOfflineThenExcludedOnEvaluation() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", 0, PresenceStatus.OFFLINE) // priority 0으로 나보다 높지만, OFFLINE이므로 무시되어야 함
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("같은 역할로 재판정되면 activate, deactivate를 다시 호출하지 않는다")
+    void ReevaluatedToSameRoleThenDoNotCallActivateOrDeactivate() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+
+        engineRoleService.reevaluate(); // 첫 판정 - ACTIVE
+        engineRoleService.reevaluate(); // 재판정 - 여전히 ACTIVE (멱등성)
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(this.activatable, times(1)).activate(); // 두 번 호출되면 안 됨.
+    }
+
+    private static EngineInfo peer(String engineId, int priority, PresenceStatus presenceStatus) {
+        return new EngineInfo(
+                engineId,
+                "localhost",
+                8080,
+                priority,
+                0L,
+                presenceStatus,
+                null);
+    }
+}
