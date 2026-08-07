@@ -12,19 +12,22 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
 import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
+import site.omagotchi.ruleservice.recovery.application.RawFailureTracker;
 import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
 @Slf4j
 @Component
 public class RawDataConsumer {
     private final WriteApiBlocking writeApi;
+    private final RawFailureTracker tracker;
     private final String orgId;
     private final String bucket;
 
     private final Counter consumed;
 
-    public RawDataConsumer(InfluxDBClient client, InfluxDbProperties properties, MeterRegistry registry){
+    public RawDataConsumer(InfluxDBClient client, InfluxDbProperties properties, MeterRegistry registry, RawFailureTracker tracker){
         this.writeApi = client.getWriteApiBlocking();
+        this.tracker = tracker;
         this.orgId = properties.org();
         this.bucket = properties.buckets().raw();
         this.consumed = registry.counter("influx.raw.consumed");
@@ -38,11 +41,8 @@ public class RawDataConsumer {
 
         try{
             writeApi.writePoint(bucket, orgId, toPoint(reading));
+            tracker.onSuccess();
             consumed.increment();
-        } catch (Exception e){
-            log.warn("raw 쓰기 실패(재시도 예정) - deviceEui={}, measurement={}, 원인={}",
-                    reading.deviceEui(), reading.measurement(), e.toString());
-            throw e;
         } finally {
             MDC.remove("traceId");
         }
