@@ -9,7 +9,7 @@ import java.time.ZoneId;
  * 테스트에서 시간 경과를 임의로 조작하기 위한 Clock
  * advance()로 시각을 앞으로 이동시킴
  */
-class MutableClock extends Clock {
+public class MutableClock extends Clock {
 
     private Instant instant;
 
