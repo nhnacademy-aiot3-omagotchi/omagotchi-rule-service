@@ -1,4 +1,4 @@
-현package site.omagotchi.ruleservice.recovery.infrastructure;
+package site.omagotchi.ruleservice.recovery.infrastructure;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
