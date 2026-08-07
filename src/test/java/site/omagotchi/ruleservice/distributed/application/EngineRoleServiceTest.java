@@ -3,6 +3,7 @@ package site.omagotchi.ruleservice.distributed.application;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.scheduling.TaskScheduler;
 import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
 import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
@@ -153,6 +154,122 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+    }
+
+    @Test
+    @DisplayName("이미 STANDBY인 상태에서 상위 피어가 사라져도 즉시 전환하지 않고, grace 경과 후에도 여전히 없으면 ACTIVE로 전환한다")
+    void gracePeriodDelaysFailoverAndAppliesIfStillGoneAfterGrace() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE)
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - 스탠바이
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of()); // 상위 피어 사라짐
+
+        engineRoleService.reevaluate(); // failover 후보 - grace 예약
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY); // 아직 안 바뀜
+        verify(this.activatable, never()).activate();
+
+        this.clock.advance(Duration.ofMillis(5_000L));
+        this.runLastScheduledTast(); // confirmFailover() 실행 - 재계산해도 여전히 없음
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(this.activatable, times(1)).activate();
+    }
+
+    @Test
+    @DisplayName("grace 대기 중 상위 피어가 복귀하면 failover가 취소된다")
+    void gracePeriodCancelledWhenPeerReturnsBeforeGraceElapses() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE)
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 스탠바이
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+        engineRoleService.reevaluate(); // failover 후보 - grace 예약
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE)
+        )); // grace 도중 복귀
+
+        this.clock.advance(Duration.ofMillis(5_000L));
+        this.runLastScheduledTast(); // confirmFailover() 재계산 시점엔 이미 복귀함 -> 스탠바이 유지
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.activatable, never()).activate();
+    }
+
+    @Test
+    @DisplayName("이미 ACTIVE인 상태에서 상위 피어가 복귀해도 1번만으로는 전환하지 않고, 연속 2번째 확인에 STANDBY로 전환한다")
+    void fallbackHysteresisRequiresTwoConsecutiveConfirmations() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - 액티브
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE)
+        )); // 상위 피어 복귀 - 1번째 확인
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 안 바뀜
+        verify(this.activatable, never()).deactivate();
+
+        this.clock.advance(Duration.ofMillis(5_000));
+        this.runLastScheduledTast(); // 2번째 확인
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.activatable, times(1)).deactivate();
+    }
+
+    @Test
+    @DisplayName("failback 히스테리시스 확인 도중 상위 피어가 다시 사라지면 카운터가 리셋된다")
+    void failbackHysteresisResetsWhenPeerDisappearsAgain() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 액티브 (현재 내가 최상위)
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE) // 상위 피어 등장
+        ));
+        engineRoleService.reevaluate(); // 1번째 확인
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of()); // 다시 사라짐
+
+        engineRoleService.reevaluate(); // judged == currentRole(ACTIVE) -> 카운터 리셋
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE) // 다시 상위 피어 등장
+        ));
+        engineRoleService.reevaluate(); // 리셋됐으므로 다시 1번째 확인일 뿐
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 전환 안 됨
+    }
+
+    /**
+     * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
+     */
+    private void runLastScheduledTast() {
+        ArgumentCaptor<Runnable> captor = ArgumentCaptor.forClass(Runnable.class);
+
+        verify(this.taskScheduler, atLeastOnce())
+                .schedule(captor.capture(), any(Instant.class));
+
+        captor.getValue().run();
     }
 
     private static EngineInfo peer(String engineId, int priority, PresenceStatus presenceStatus) {
