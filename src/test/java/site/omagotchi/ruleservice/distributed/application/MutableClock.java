@@ -13,11 +13,11 @@ public class MutableClock extends Clock {
 
     private Instant instant;
 
-    MutableClock(Instant instant) {
+    public MutableClock(Instant instant) {
         this.instant = instant;
     }
 
-    void advance(Duration duration) {
+    public void advance(Duration duration) {
         this.instant = this.instant.plus(duration);
     }
 

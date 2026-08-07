@@ -15,6 +15,7 @@ import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
 import site.omagotchi.ruleservice.distributed.domain.EngineRole;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,6 +42,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private final String applicationName;
     private final String selfEngineId;
     private final List<EnginePresenceListener> enginePresenceListeners;
+    private final Clock clock;
 
     // peerEngineId -> 현재 알려진 정보(판정된 presenceStatus 포함)
     private final Map<String, EngineInfo> knownEngines = new ConcurrentHashMap<>();
@@ -52,13 +54,15 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                                   RestClient enginePollingRestClient,
                                   @Value("${spring.application.name}") String applicationName,
                                   @Value("${engine.id}") String selfEngineId,
-                                  @Lazy List<EnginePresenceListener> enginePresenceListeners) {
+                                  @Lazy List<EnginePresenceListener> enginePresenceListeners,
+                                  Clock clock) {
 
         this.discoveryClient = discoveryClient;
         this.enginePollingRestClient = enginePollingRestClient;
         this.applicationName = applicationName;
         this.selfEngineId = selfEngineId;
         this.enginePresenceListeners = enginePresenceListeners;
+        this.clock = clock;
     }
 
     /**
@@ -120,12 +124,12 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     response.engineRole() // 폴링 성공 시엔 피어가 방금 보고한 engineRole 그대로 반영
             ));
 
-            this.lastPolledSuccessAt.put(peerEngineId, System.currentTimeMillis());
+            this.lastPolledSuccessAt.put(peerEngineId, this.clock.millis());
         } catch (Exception e) {
             log.debug("[{}] 폴링 실패 (host = {}, port = {})", peerEngineId, instance.getHost(), instance.getPort(), e);
 
             // 처음 보는 피어에게는 유예를 줌 - 지금 막 발견됐다는 이유만으로 바로 OFFLINE 판정하지 않음
-            this.lastPolledSuccessAt.putIfAbsent(peerEngineId, System.currentTimeMillis());
+            this.lastPolledSuccessAt.putIfAbsent(peerEngineId, this.clock.millis());
             this.knownEngines.putIfAbsent(peerEngineId, new EngineInfo(
                     peerEngineId,
                     instance.getHost(),
@@ -147,7 +151,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     }
 
     private boolean judgePresence() {
-        long now = System.currentTimeMillis();
+        long now = this.clock.millis();
         boolean changed = false;
 
         for (Map.Entry<String, Long> entry : this.lastPolledSuccessAt.entrySet()) {
