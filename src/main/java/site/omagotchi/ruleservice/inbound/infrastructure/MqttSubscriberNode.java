@@ -2,6 +2,7 @@ package site.omagotchi.ruleservice.inbound.infrastructure;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.*;
 import org.eclipse.paho.mqttv5.common.MqttException;
@@ -24,6 +25,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     private MqttAsyncClient mqttAsyncClient;
 
     // ACTIVE 게이트 상태 - 이 노드가 지금 구독해야 하는지 여부
+    @Getter
     private volatile boolean activated = false;
 
     public MqttSubscriberNode(String id, String brokerUrl, String topicFilter,

@@ -11,4 +11,7 @@ public interface Activatable{
     void activate();
 
     void deactivate();
+
+    // FlowManager가 stop/start 전후로 활성 상태를 보존하기 위해 조회
+    boolean isActivated();
 }

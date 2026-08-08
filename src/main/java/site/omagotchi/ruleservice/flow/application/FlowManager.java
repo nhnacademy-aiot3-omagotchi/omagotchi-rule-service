@@ -27,6 +27,7 @@ public class FlowManager {
     private final FlowEngine flowEngine;
     private final NodeRegistry nodeRegistry;
     private final Map<String, FlowEntry> flowEntries = new ConcurrentHashMap<>();
+    private final Map<Activatable, Boolean> activationSnapshots = new ConcurrentHashMap<>();
 
     // deploy가 등록과 시작 한 번에 함
     // 검증 -> 노드 생성(NodeRegistry) -> 배선 -> FlowEngine 등록/시작 (중복 id는 예외)
@@ -103,21 +104,31 @@ public class FlowManager {
     public void start(String flowId) {
         this.requireEntry(flowId);
         flowEngine.start(flowId);
+        this.restoreActivationState(flowId); // 재기동 후 원래 활성 상태 복원
     }
 
     public void stop(String flowId) {
         this.requireEntry(flowId);
+        this.captureActivationState(flowId); // 끄기 전에 현재 활성 상태 기억
         flowEngine.stop(flowId);
     }
 
     public void restart(String flowId) {
         this.requireEntry(flowId);
+        this.captureActivationState(flowId);
         flowEngine.stop(flowId);
         flowEngine.start(flowId);
+        this.restoreActivationState(flowId);
     }
 
     public void remove(String flowId) {
         this.requireEntry(flowId);
+
+        // 제거 전에 activationSnapshots에서도 정리 (메모리 누수 방지)
+        // unregister/flowEntries.remove 전에 해야 노드 목록을 뽑을 수 있음
+        for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
+            this.activationSnapshots.remove(activatable);
+        }
 
         if (flowEngine.getState(flowId) == FlowState.RUNNING) {
             flowEngine.stop(flowId);
@@ -196,28 +207,49 @@ public class FlowManager {
 
     /**
      * 배포된 모든 플로우를 통틀어서 Activatable을 구현한 노드만 모아서 리턴
-     * EngineActiveController가 역할 전환 시 activate()/deactivate()를 지시할 대상
+     * EngineRoleService가 역할 전환 시 activate()/deactivate()를 지시할 대상
      */
     public List<Activatable> getActivatableNodes() {
         List<Activatable> activatables = new ArrayList<>();
 
-        // 배포된 플로우 전부 훑고
-        for (Map.Entry<String, FlowEntry> entry : flowEntries.entrySet()) {
-            String flowId = entry.getKey();
-            FlowEntry flowEntry = entry.getValue();
+        for (String flowId : this.flowEntries.keySet()) {
+            activatables.addAll(this.getActivatableNodesOf(flowId));
+        }
 
-            // 그 안의 노드 전부 훑어서
-            for (NodeDefinition nodeDef : flowEntry.flowDefinition().nodes()) {
-                AbstractNode node = flowEngine.getNode(flowId, nodeDef.id()); // 실제 노드 인스턴스 가져오기
+        return activatables;
+    }
 
-                // Activatable인 것만 리스트에 담기
-                if (node instanceof Activatable activatable) { // 타입 체크 + 캐스팅 한 번에
-                    activatables.add(activatable);
-                }
+    // 단일 플로우 안의 Activatable 노드만 모아서 리턴
+    // (stop/start/restart/remove의 상태 보존/정리용)
+    private List<Activatable> getActivatableNodesOf(String flowId) {
+        List<Activatable> activatables = new ArrayList<>();
+        FlowEntry flowEntry = this.flowEntries.get(flowId);
+
+        for (NodeDefinition nodeDef : flowEntry.flowDefinition().nodes()) {
+            AbstractNode node = this.flowEngine.getNode(flowId, nodeDef.id());
+
+            if (node instanceof Activatable activatable) {
+                activatables.add(activatable);
             }
         }
 
         return activatables;
+    }
+
+    private void captureActivationState(String flowId) {
+        for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
+            this.activationSnapshots.put(activatable, activatable.isActivated());
+        }
+    }
+
+    private void restoreActivationState(String flowId) {
+        for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
+            if (Boolean.TRUE.equals(this.activationSnapshots.get(activatable))) {
+                activatable.activate();
+            }
+
+            // false이거나 기록 없음(최초 배포 직후 등)이면 원래도 비활성이니 그대로 둠
+        }
     }
 
     // FlowManager 차원의 존재 확인
