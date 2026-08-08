@@ -49,7 +49,6 @@ public class RabbitTopologyConfig {
     public Queue queueRaw(){
         return QueueBuilder
                 .durable(QUEUE_RAW)
-                .deadLetterExchange(EXCHANGE_RAW_DEAD_LETTER)
                 .build();
     }
 
