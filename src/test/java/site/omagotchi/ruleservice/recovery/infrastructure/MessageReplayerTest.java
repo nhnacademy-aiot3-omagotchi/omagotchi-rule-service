@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.ChannelCallback;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
@@ -19,7 +21,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -54,6 +59,7 @@ class MessageReplayerTest {
     @Test
     @DisplayName("DLQ에 들어간 raw데이터 재발행 성공 테스트")
     void publishSuccessTest() throws Exception {
+        givenBrokerConfirms(true);
         when(channel.basicGet(QUEUE, false))
                 .thenReturn(responseWith(1L, Map.of(
                         "x-original-exchange", ORIGINAL_EXCHANGE,
@@ -63,8 +69,29 @@ class MessageReplayerTest {
         int replayed = replayer.replay(10);
 
         assertThat(replayed).isEqualTo(1);
-        verify(channel).basicPublish(eq(ORIGINAL_EXCHANGE), eq(ORIGINAL_ROUTING_KEY), any(), any());
+        verify(rabbitTemplate).send(eq(ORIGINAL_EXCHANGE), eq(ORIGINAL_ROUTING_KEY),
+                any(Message.class), any(CorrelationData.class));
         verify(channel).basicAck(1L, false);
+    }
+
+    @Test
+    @DisplayName("브로커가 nack하면 원본을 지우지 않고 큐에 되돌린다")
+    void publishNackKeepsOriginalTest() throws Exception {
+        givenBrokerConfirms(false);
+        when(channel.basicGet(QUEUE, false))
+                .thenReturn(responseWith(1L, Map.of(
+                        "x-original-exchange", ORIGINAL_EXCHANGE,
+                        "x-original-routingKey", ORIGINAL_ROUTING_KEY)));
+
+        int replayed = replayer.replay(10);
+
+        // 확인을 못 받았으면 원본을 지우지 않는다 — 유실보다 중복이 낫다
+        assertThat(replayed).isZero();
+        verify(channel, never()).basicAck(anyLong(), eq(false));
+        verify(channel).basicNack(1L, false, true);
+
+        // 브로커가 흔들리는 상황이라 남은 건도 시도하지 않는다. 건당 타임아웃이 누적되면 안 된다.
+        verify(channel, times(1)).basicGet(QUEUE, false);
     }
 
     @Test
@@ -77,13 +104,14 @@ class MessageReplayerTest {
         int replayed = replayer.replay(10);
 
         assertThat(replayed).isZero();
-        verify(channel, never()).basicPublish(any(), any(), any(), any());
+        verify(rabbitTemplate, never()).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
         verify(channel).basicNack(1L, false, true); // requeue=true — 유실 없이 큐에 되돌린다
     }
 
     @Test
     @DisplayName("건너뛴 메세지가 루프를 막지 않아 뒤 메세지까지 처리된다")
     void skippedMessageDoesNotBlockLoopTest() throws Exception {
+        givenBrokerConfirms(true);
         when(channel.basicGet(QUEUE, false))
                 .thenReturn(responseWith(1L, Map.of("x-death", "목적지 없음")))
                 .thenReturn(responseWith(2L, Map.of(
@@ -102,6 +130,7 @@ class MessageReplayerTest {
     @Test
     @DisplayName("max에 도달하면 큐에 메세지가 남아 있어도 멈춘다")
     void stopsAtMaxTest() throws Exception {
+        givenBrokerConfirms(true);
         when(channel.basicGet(QUEUE, false))
                 .thenReturn(responseWith(1L, Map.of(
                         "x-original-exchange", ORIGINAL_EXCHANGE,
@@ -121,7 +150,19 @@ class MessageReplayerTest {
         int replayed = replayer.replay(10);
 
         assertThat(replayed).isZero();
-        verify(channel, never()).basicPublish(any(), any(), any(), any());
+        verify(rabbitTemplate, never()).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
+    }
+
+    /**
+     * 목 send()는 void라 확인 future가 영원히 완료되지 않는다.
+     * 스텁하지 않으면 매 건 타임아웃(5초)을 기다린 뒤 실패한다.
+     */
+    private void givenBrokerConfirms(boolean ack) {
+        doAnswer(invocation -> {
+            CorrelationData correlation = invocation.getArgument(3);
+            correlation.getFuture().complete(new CorrelationData.Confirm(ack, ack ? null : "테스트 nack"));
+            return null;
+        }).when(rabbitTemplate).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
     }
 
     private GetResponse responseWith(long deliveryTag, Map<String, Object> headers) {
