@@ -3,14 +3,23 @@ package site.omagotchi.ruleservice.recovery.infrastructure;
 import com.rabbitmq.client.GetResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.support.DefaultMessagePropertiesConverter;
+import org.springframework.amqp.rabbit.support.MessagePropertiesConverter;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 @Slf4j
@@ -20,6 +29,8 @@ public class MessageReplayer {
 
     private static final String QUEUE = RabbitTopologyConfig.QUEUE_RAW_DEAD_LETTER;
     private final RabbitTemplate rabbitTemplate;
+
+    private final MessagePropertiesConverter propertiesConverter = new DefaultMessagePropertiesConverter();
 
     /**
      * DLQ 메세지 재발행
@@ -53,12 +64,12 @@ public class MessageReplayer {
                 }
 
                 String routingKey = header(headers, "x-original-routingKey");
-                channel.basicPublish(
-                        exchange,
-                        Objects.isNull(routingKey) ? "" : routingKey,
-                        response.getProps(),
-                        response.getBody()
-                );
+
+                if(!publishConfirmed(exchange, routingKey, response, deliveryTag)){
+                    skipped.add(deliveryTag);
+                    break;
+                }
+
                 channel.basicAck(deliveryTag, false);
                 count++;
             }
@@ -70,6 +81,35 @@ public class MessageReplayer {
 
             return count;
         });
+    }
+
+    /** 원 목적지로 재발행할때 브로커의 응답을 확인 */
+    private boolean publishConfirmed(String exchange, String routingKey, GetResponse response, long deliveryTag){
+        MessageProperties messageProperties = propertiesConverter.toMessageProperties(
+                response.getProps(), response.getEnvelope(), StandardCharsets.UTF_8.name()
+        );
+
+        Message message = new Message(response.getBody(), messageProperties);
+
+        CorrelationData correlationData = new CorrelationData(String.valueOf(deliveryTag));
+        rabbitTemplate.send(exchange, Objects.isNull(routingKey) ? "" : routingKey, message, correlationData);
+
+        try{
+            CorrelationData.Confirm confirm = correlationData.getFuture().get(5, TimeUnit.SECONDS);
+
+            if(confirm.ack()){
+                return true;
+            }
+
+            log.error("재발행 nack DLQ에 남김. deliveryTag={}, 사유={}", deliveryTag, confirm.reason());
+        }catch (InterruptedException e){
+            Thread.currentThread().interrupt();
+            log.error("재발행중 인터럽트 발생 DLQ에 남김. deliveryTag={}", deliveryTag);
+        }catch (Exception e){
+            log.error("재발행 예외 발생 DLQ에 남김). deliveryTag={}, 원인={}", deliveryTag, e.toString());
+        }
+
+        return false;
     }
 
     private String header(Map<String, Object> headers, String key){
