@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
+import site.omagotchi.ruleservice.recovery.application.RawFailureTracker;
 import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
 import java.time.Instant;
@@ -28,6 +29,9 @@ class RawDataConsumerTest {
 
     @Mock
     WriteApiBlocking writeApi;
+
+    @Mock
+    RawFailureTracker tracker;
 
     SimpleMeterRegistry registry;
 
@@ -47,7 +51,7 @@ class RawDataConsumerTest {
                 new InfluxDbProperties.Retention(7, 365, 0)
         );
 
-        consumer = new RawDataConsumer(client, properties, registry);
+        consumer = new RawDataConsumer(client, properties, registry, tracker);
 
         reading = new SensorReading(
                 "test-traceId",

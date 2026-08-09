@@ -57,8 +57,7 @@ class RabbitTopologyConfigTest {
         assertDoesNotThrow(
                 () -> rabbitTemplate.execute( channel ->{
                         channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_MAIN);
-                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_UNROUTED);
-                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_DEAD_LETTER);
+                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_RAW_DEAD_LETTER);
                         return null;
                     })
         );
@@ -70,8 +69,7 @@ class RabbitTopologyConfigTest {
         assertAll(
                 () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_RAW)),
                 () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_QUALITY)),
-                () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_DEAD_LETTER)),
-                () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_UNROUTED))
+                () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_RAW_DEAD_LETTER))
         );
     }
 
@@ -93,13 +91,6 @@ class RabbitTopologyConfigTest {
 
         assertNotNull(receivedQuality);
         assertEquals(testMessage, receivedQuality);
-
-        //라우팅 실패 메세지 검증
-        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EXCHANGE_UNROUTED, "뭔 말도 안되는 라우팅 키", testMessage);
-        Object receivedUnRout = rabbitTemplate.receiveAndConvert(RabbitTopologyConfig.QUEUE_UNROUTED, 2000);
-
-        assertNotNull(receivedUnRout);
-        assertEquals(testMessage, receivedUnRout);
 
     }
 
