@@ -63,7 +63,7 @@ public class MessageReplayer {
                 count++;
             }
 
-            // 실채한 메세지를 DLQ에 그냥 두도록 nack응답
+            // 실패한 메세지를 DLQ에 그냥 두도록 nack응답
             for (long tag : skipped) {
                 channel.basicNack(tag, false, true);
             }
