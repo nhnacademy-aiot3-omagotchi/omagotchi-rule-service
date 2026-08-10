@@ -58,3 +58,7 @@ hs_err_pid*
 replay_pid*
 .mise.local.toml
 mise.local.toml
+.serena
+
+### Paho MQTT persistence ###
+*.lck

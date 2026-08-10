@@ -5,6 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "sensor")
 public record SensorProperties(
         String brokerUrl,
-        String clientId
+        String clientId,
+        String username,
+        String password
 ) {
 }

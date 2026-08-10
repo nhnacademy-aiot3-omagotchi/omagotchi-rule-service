@@ -61,10 +61,31 @@ management:
     health:
       show-details: never
 
+auth:
+  jwt:
+    issuer: ${JWT_ISSUER:https://identity.omagotchi.local}
+    audience: ${JWT_AUDIENCE:omagotchi-api}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:./secrets/jwt-public.pem}
+
 #fixme
 sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
+  username: ${SENSOR_USERNAME:}
+  password: ${SENSOR_PASSWORD:}
+
+influx:
+  url: ${INFLUXDB_URL:http://localhost:8086}
+  token: ${INFLUXDB_TOKEN:token}
+  org: ${INFLUXDB_ORG_ID:org}
+  buckets:
+    raw: omagotchi-raw
+    avg-1h: omagotchi-avg-1h
+    avg-1d: omagotchi-avg-1d
+  retention:
+    raw-days: 7
+    avg-1h-days: 365
+    avg-1d-days: 0
 
 # 이 프로세스 내부에서만 쓰이는 값 (@ConfigurationProperties(prefix = "engine")
 engine:
@@ -101,7 +122,7 @@ quality:
   inventory:
     - deviceEui: "24e124126d152862"
       measurement: "temperature"
-      expectedIntervalSeconds: 60
+      expectedIntervalSeconds: 120
     - deviceEui: "24e124126d152590"
       measurement: "temperature"
       expectedIntervalSeconds: 60
@@ -110,7 +131,7 @@ quality:
       expectedIntervalSeconds: 60
     - deviceEui: "24e124128c140101"
       measurement: "temperature"
-      expectedIntervalSeconds: 900
+      expectedIntervalSeconds: 600
     - deviceEui: "24e124136d151836"
       measurement: "temperature"
       expectedIntervalSeconds: 60
@@ -122,10 +143,8 @@ quality:
       expectedIntervalSeconds: 60
     - deviceEui: "24e124725d089152"
       measurement: "temperature"
-      expectedIntervalSeconds: 900
-    - deviceEui: "modbus"
-      measurement: "temperature"
-      expectedIntervalSeconds: 5
+      expectedIntervalSeconds: 600
+
 
 # 로그 패턴에 두 MDC값 모두 노출
 # requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.

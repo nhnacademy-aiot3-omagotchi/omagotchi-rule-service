@@ -4,7 +4,7 @@ import java.time.Instant;
 
 public record SensorReading(
         String traceId,
-        //topic
+        //deviceInfo.tags
         String location,
         String point,
         String deviceEui,
@@ -13,7 +13,10 @@ public record SensorReading(
         double value,
         Instant measuredAt,
         Instant receivedAt,
-        String deviceName
+        String deviceName,
+        //frame
+        Long fCnt
+
 ) {
 
 }

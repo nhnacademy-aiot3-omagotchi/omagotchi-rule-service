@@ -10,10 +10,12 @@ import org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.utility.DockerImageName;
+import site.omagotchi.ruleservice.global.security.TestJwtKeyConfig;
 
 import java.util.Map;
 
@@ -21,9 +23,10 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 /** 실제 환경을 testContainer로 확인 (통합 x)*/
 @Slf4j
-@SpringBootTest
-@ActiveProfiles("local")
+@Import(TestJwtKeyConfig.class)
+@ActiveProfiles("test")
 @ImportAutoConfiguration(RabbitAutoConfiguration.class)
+@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 class RabbitTopologyConfigTest {
 
     @Container
@@ -54,8 +57,7 @@ class RabbitTopologyConfigTest {
         assertDoesNotThrow(
                 () -> rabbitTemplate.execute( channel ->{
                         channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_MAIN);
-                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_UNROUTED);
-                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_DEAD_LETTER);
+                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_RAW_DEAD_LETTER);
                         return null;
                     })
         );
@@ -67,8 +69,7 @@ class RabbitTopologyConfigTest {
         assertAll(
                 () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_RAW)),
                 () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_QUALITY)),
-                () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_DEAD_LETTER)),
-                () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_UNROUTED))
+                () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_RAW_DEAD_LETTER))
         );
     }
 
@@ -91,14 +92,6 @@ class RabbitTopologyConfigTest {
         assertNotNull(receivedQuality);
         assertEquals(testMessage, receivedQuality);
 
-        //라우팅 실패 메세지 검증
-        rabbitTemplate.convertAndSend(RabbitTopologyConfig.EXCHANGE_UNROUTED, "뭔 말도 안되는 라우팅 키", testMessage);
-        Object receivedUnRout = rabbitTemplate.receiveAndConvert(RabbitTopologyConfig.QUEUE_UNROUTED, 2000);
-
-        assertNotNull(receivedUnRout);
-        assertEquals(testMessage, receivedUnRout);
-
     }
-
 
 }

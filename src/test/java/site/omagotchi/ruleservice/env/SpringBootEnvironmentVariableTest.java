@@ -7,8 +7,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
+import site.omagotchi.ruleservice.global.security.TestJwtKeyConfig;
 
 /**
  * Bean 컴포넌트 스캔이 없는 최소 설정 클래스를 테스트 안에서 만들어서 classes로 지정
@@ -19,7 +21,8 @@ import org.springframework.test.context.ActiveProfiles;
  */
 @SpringBootTest(classes = SpringBootEnvironmentVariableTest.MinimalTestConfig.class)
 @Slf4j
-@ActiveProfiles("local")
+@Import(TestJwtKeyConfig.class)
+@ActiveProfiles("test")
 class SpringBootEnvironmentVariableTest {
 
     @SpringBootConfiguration

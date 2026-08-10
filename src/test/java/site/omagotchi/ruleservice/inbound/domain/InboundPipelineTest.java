@@ -53,12 +53,20 @@ class InboundPipelineTest {
         engine.start(FLOW_ID);
 
         // MqttSubscriberNode가 만들었을 법한 원시 메시지 (traceId는 여기서 발급됨)
-        String rawJson = "{\"value\":650.0,"
-                + "\"time\":\"2026-07-07T03:34:10.456Z\","
-                + "\"device_name\":\"AM107-140101\","
-                + "\"device_eui\":\"24e124128c140101\"}";
+        String rawJson = """
+                {
+                  "deviceInfo": {
+                    "deviceProfileName": "AM107",
+                    "deviceName": "AM107-140101",
+                    "devEui": "24e124128c140101",
+                    "tags": { "location": "실습실", "point": "전방우측" }
+                  },
+                  "fCnt": 12345,
+                  "object": { "co2": 650.0 },
+                  "rxInfo": [ { "gatewayId": "24e124fffef79304", "nsTime": "2026-07-07T03:34:10.456+00:00" } ]
+                }""";
         Message input = Message.of(Map.of(
-                "topic", "iot/실습실/전방우측/AM107/24e124128c140101/co2",
+                "topic", "application/96b4d719/device/24e124128c140101/event/up",
                 "raw", rawJson,
                 "receivedAt", Instant.now()
         ));

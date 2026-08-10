@@ -32,7 +32,7 @@ public class StuckSensorNodeTest {
     private Message message(String measurement, double value, Instant measuredAt) {
         SensorReading reading = new SensorReading(
                 "trace-1", "실습실", "전방", "eui-1", measurement,
-                value, measuredAt, measuredAt, "sensor-1");
+                value, measuredAt, measuredAt, "sensor-1",1L);
         return Message.of("trace-1", Map.of("sensorReading", reading));
     }
 

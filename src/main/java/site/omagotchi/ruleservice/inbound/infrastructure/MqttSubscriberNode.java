@@ -12,6 +12,7 @@ import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 
@@ -19,8 +20,10 @@ import java.util.Map;
 public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Activatable {
 
     private final String brokerUrl;
-    private final String topicFilter;
     private final String clientId;
+    private final String username;
+    private final String password;
+    private final String topicFilter;
     private final Counter receivedCounter;
     private MqttAsyncClient mqttAsyncClient;
 
@@ -28,13 +31,15 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     @Getter
     private volatile boolean activated = false;
 
-    public MqttSubscriberNode(String id, String brokerUrl, String topicFilter,
-                              String clientId, MeterRegistry meterRegistry) {
+    public MqttSubscriberNode(String id, String brokerUrl, String clientId, String username, String password, String topicFilter
+                              , MeterRegistry meterRegistry) {
         super(id);
 
         this.brokerUrl = brokerUrl;
-        this.topicFilter = topicFilter;
         this.clientId = clientId;
+        this.username = username;
+        this.password = password;
+        this.topicFilter = topicFilter;
         this.receivedCounter = meterRegistry.counter("mqtt.messages.received", "topicFilter", topicFilter);
 
         addOutputPort("out");
@@ -63,6 +68,11 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
             // 연결 끊긴 뒤 몇 초까지 세션을 브로커가 기억해줄지
             mqttConnectionOptions.setSessionExpiryInterval(600L);
 
+            if (username != null && !username.isBlank() && password != null) {
+                mqttConnectionOptions.setUserName(username);
+                mqttConnectionOptions.setPassword(password.getBytes(StandardCharsets.UTF_8));
+            }
+
             mqttAsyncClient = new MqttAsyncClient(brokerUrl, clientId);
 
             // 콜백 받을 객체 설정
@@ -70,6 +80,9 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
 
             // 브로커 연결 시도
             mqttAsyncClient.connect(mqttConnectionOptions).waitForCompletion();
+            //토픽으로 구독 신청
+            mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
+
         } catch (MqttException e) {
             log.error("[{}] MQTT 초기화 실패 (brokerUrl={})", getId(), brokerUrl, e);
             throw new RuntimeException(e);
@@ -127,7 +140,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         receivedCounter.increment();
 
-        String payloadStr = new String(message.getPayload());
+        String payloadStr = new String(message.getPayload(), StandardCharsets.UTF_8);
 
         Message msg = Message.of(Map.of(
                 "topic", topic,
@@ -181,5 +194,9 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     @Override
     public void authPacketArrived(int reasonCode, MqttProperties properties) {
 
+    }
+
+    public String getClientId() {
+        return clientId;
     }
 }

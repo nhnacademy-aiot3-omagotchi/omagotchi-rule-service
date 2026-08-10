@@ -4,18 +4,18 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.utility.DockerImageName;
+import site.omagotchi.ruleservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 
@@ -23,7 +23,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Slf4j
 @SpringBootTest
-@ActiveProfiles("local")
+@Import(TestJwtKeyConfig.class)
+@ActiveProfiles("test")
 @ImportAutoConfiguration(RabbitAutoConfiguration.class)
 class RuleSyncListenerTest {
 
