@@ -3,8 +3,7 @@ package site.omagotchi.ruleservice.flow.application;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import site.omagotchi.ruleservice.flow.application.FlowManager;
-import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
@@ -20,15 +19,31 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FlowConfigService {
 
     private final FlowManager flowManager;
+    private final PeerFlowSyncPort peerFlowSyncPort;
 
     // key: "flowId:nodeId" -> 이 서비스가 마지막으로 성공시킨 config를 스스로 기억
     private final Map<String, Map<String, Object>> appliedConfigs = new ConcurrentHashMap<>();
 
     /**
+     * 공개 PATCH 엔드포인트 전용 -> 로컬 적용 후 파트너에게도 전달
+     */
+    public synchronized void reconfigure(String flowId, String nodeId, Map<String, Object> newConfig) {
+        this.applyReconfigureLocally(flowId, nodeId, newConfig); // 로컬 적용
+        this.peerFlowSyncPort.syncReconfigure(flowId, nodeId, newConfig); // 파트너에게 전달 (내부 통신)
+    }
+
+    /**
+     * 내부 전용 엔드포인트 전용 -> 파트너가 이미 결정한 걸 로컬에만 적용, 재전달X (무한루프 방지)
+     */
+    public synchronized void applyReconfigureFromPeer(String flowId, String nodeId, Map<String, Object> newConfig) {
+        this.applyReconfigureLocally(flowId, nodeId, newConfig);
+    }
+
+    /**
      * synchronized가 붙으면서 인스턴스 전체(이 서비스 Bean 하나)를 락으로 쓰는거라서, 서로 다른 플로우/노드에 대한 PATCH도 이 메서드 안에서는 직렬화됨
      * -> PATCH는 자주 운영되는 게 아니라 일단 이렇게 하기는 했으나, 혹시 나중에 이 부분이 병목이 되면 그때 노드별 락으로 세분화
      */
-    public synchronized void reconfigure(String flowId, String nodeId, Map<String, Object> newConfig) {
+    private void applyReconfigureLocally(String flowId, String nodeId, Map<String, Object> newConfig) {
         AbstractNode node = flowManager.getNode(flowId, nodeId); // 없으면 BusinessException(404)
 
         if (!(node instanceof Reconfigurable reconfigurable)) {
