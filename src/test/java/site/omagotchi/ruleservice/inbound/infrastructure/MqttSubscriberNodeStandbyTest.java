@@ -61,7 +61,7 @@ class MqttSubscriberNodeStandbyTest {
     void setUp() throws Exception {
         String brokerUrl = "tcp://" + mosquitto.getHost() + ":" + MOSQUITTO_PORT;
 
-        node = new MqttSubscriberNode("mqtt-1", brokerUrl, TOPIC, "subscriber-test", new SimpleMeterRegistry());
+        node = new MqttSubscriberNode("mqtt-1", brokerUrl, "subscriber-test", null, null, TOPIC, new SimpleMeterRegistry());
         outConnection = new RecordingConnection();
         node.getOutputPort("out").connect(outConnection);
         node.initialize();
