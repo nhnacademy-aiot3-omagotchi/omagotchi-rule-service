@@ -35,7 +35,8 @@ import java.util.Objects;
 public class EngineRoleService implements EnginePresenceListener, EngineActivePort {
 
     private static final long INITIAL_WAIT_MS = 15_000L;
-    private static final long GRACE_MS = 5_000L;
+    //    private static final long GRACE_MS = 5_000L;
+    private static final long GRACE_MS = 3_000L; // 5초 -> 3초 (테스트)
     private static final int FAILBACK_CONFIRMATIONS = 2;
     private static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;
 

@@ -1,6 +1,10 @@
 # 분산 엔진 검증용 - engine-a/engine-b 두 인스턴스를 로컬에서 동시에 띄워 Eureka 등록·상호 발견이 정상 동작하는지 확인하기 위한 로컬 전용 구성
 # 실제 서버 배포(discovery-service, RabbitMQ, MQTT 등 학교 제공 인프라)와는 별개
 
+# 사전 조건: omagotchi-identity-service를 이 저장소와 같은 레벨에 클론해두고,
+# 07-local-development.md에 나와있는 것처럼 secrets/jwt-*.pem을 생성해둬야 함.
+# (폴더명이 다르면 아래 volumes 경로를 맞게 바꿀 것)
+
 services:
   engine-a:
     build: .
@@ -13,10 +17,19 @@ services:
       SENSOR_CLIENT_ID: rule-engine-1
       EUREKA_ENABLED: "true"
       EUREKA_URL: http://host.docker.internal:8761/eureka/
+      JWT_PUBLIC_KEY_LOCATION: file:/identity-secrets/jwt-public.pem
+    volumes:
+      - ../omagotchi-identity-service/secrets:/identity-secrets:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8081:8081"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1" ]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 5s
 
   engine-b:
     build: .
@@ -29,7 +42,16 @@ services:
       SENSOR_CLIENT_ID: rule-engine-2
       EUREKA_ENABLED: "true"
       EUREKA_URL: http://host.docker.internal:8761/eureka/
+      JWT_PUBLIC_KEY_LOCATION: file:/identity-secrets/jwt-public.pem
+    volumes:
+      - ../omagotchi-identity-service/secrets:/identity-secrets:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8082:8082"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8082/actuator/health || exit 1" ]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 5s

@@ -29,8 +29,11 @@ public class RestClientConfig {
     @Bean
     public RestClient engineInternalRestClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(2_000); // 연결 타임아웃 2초
-        factory.setReadTimeout(2_000); // 읽기 타임아웃 2초
+//        factory.setConnectTimeout(2_000); // 연결 타임아웃 2초
+//        factory.setReadTimeout(2_000); // 읽기 타임아웃 2초
+
+        factory.setConnectTimeout(300); // 연결 타임아웃 300ms
+        factory.setReadTimeout(500); // 읽기 타임아웃 500ms
 
         return RestClient.builder()
                 .requestFactory(factory)
