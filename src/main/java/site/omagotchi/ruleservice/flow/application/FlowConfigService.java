@@ -35,7 +35,7 @@ public class FlowConfigService {
     /**
      * 내부 전용 엔드포인트 전용 -> 파트너가 이미 결정한 걸 로컬에만 적용, 재전달X (무한루프 방지)
      */
-    public synchronized void applyReconfigureFromPeer(String flowId, String nodeId, Map<String, Object> newConfig) {
+    public synchronized void reconfigureFromPeer(String flowId, String nodeId, Map<String, Object> newConfig) {
         this.applyReconfigureLocally(flowId, nodeId, newConfig);
     }
 
