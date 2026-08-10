@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.flow.application;
 
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 import site.omagotchi.ruleservice.flow.domain.FlowState;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -34,11 +35,14 @@ class FlowManagerTest {
     @Mock
     private NodeRegistry nodeRegistry;
 
+    @Mock
+    private EngineActivePort engineActivePort;
+
     private FlowManager flowManager;
 
     @BeforeEach
     void setUp() {
-        flowManager = new FlowManager(flowEngine, nodeRegistry);
+        flowManager = new FlowManager(flowEngine, nodeRegistry, engineActivePort);
     }
 
     private AbstractNode mockNode(String id) {

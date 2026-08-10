@@ -12,6 +12,7 @@ import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
 import site.omagotchi.ruleservice.distributed.domain.EngineRole;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
 import java.time.Clock;
@@ -31,7 +32,7 @@ import java.util.Objects;
         havingValue = "true",
         matchIfMissing = true
 )
-public class EngineRoleService implements EnginePresenceListener {
+public class EngineRoleService implements EnginePresenceListener, EngineActivePort {
 
     private static final long INITIAL_WAIT_MS = 15_000L;
     private static final long GRACE_MS = 5_000L;
@@ -81,6 +82,11 @@ public class EngineRoleService implements EnginePresenceListener {
     @Override
     public void onPresenceChanged() {
         this.reevaluate();
+    }
+
+    @Override
+    public boolean isSelfActive() {
+        return this.currentRole == EngineRole.ACTIVE;
     }
 
     // package-private (테스트 클래스에서 @PostConstruct 스케줄링을 기다리지 않고 직접 호출해서 검증할 수 있도록)

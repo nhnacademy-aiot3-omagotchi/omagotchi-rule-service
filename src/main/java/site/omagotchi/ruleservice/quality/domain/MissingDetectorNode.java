@@ -95,18 +95,6 @@ public class MissingDetectorNode extends AbstractNode implements Activatable {
         log.info("[{}] 결측 감지 타이머 중단", getId());
     }
 
-    /**
-     * checkTask 필드는 volatile이 아니라서 synchronized 없이 읽으면
-     * activate/deactivate를 호출한 다른 스레드(EngineRoleService의 스케줄러 스레드 등)가 방금 바꾼 값을
-     * 이 스레드(FlowManager의 stop/start 호출 스레드 등)가 못 볼 수 있음
-     * -> synchronized나 volatile 없이는 한 스레드의 쓰기가 다른 스레드에 언제 보이는지 보장 안 되므로.
-     * -> activate/deactivate가 synchronized라서, isActivated도 같은 락을 잡아야 항상 최신값을 읽을 수 있음
-     */
-    @Override
-    public synchronized boolean isActivated() {
-        return Objects.nonNull(this.checkTask);
-    }
-
     // 테스트에서 직접 호출하기 위해 package-private
     void check() {
         Instant now = Instant.now();

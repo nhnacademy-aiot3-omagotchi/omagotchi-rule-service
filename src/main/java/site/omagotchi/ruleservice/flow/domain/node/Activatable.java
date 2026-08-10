@@ -6,12 +6,9 @@ package site.omagotchi.ruleservice.flow.domain.node;
  * 반응형 노드는 입력이 없으면 자연히 유휴 상태이므로 대상 아님
  * 룰 동기화는 standby도 항상 수행
  */
-public interface Activatable{
+public interface Activatable {
 
     void activate();
 
     void deactivate();
-
-    // FlowManager가 stop/start 전후로 활성 상태를 보존하기 위해 조회
-    boolean isActivated();
 }

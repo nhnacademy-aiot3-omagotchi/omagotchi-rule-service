@@ -1,19 +1,18 @@
 package site.omagotchi.ruleservice.flow.application;
 
-import site.omagotchi.ruleservice.flow.domain.FlowState;
-
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
-import site.omagotchi.ruleservice.flow.domain.node.Activatable;
-import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
-import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 import site.omagotchi.ruleservice.flow.domain.Flow;
+import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
+import site.omagotchi.ruleservice.flow.domain.node.Activatable;
+import site.omagotchi.ruleservice.flow.domain.registry.NodeRegistry;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.ConnectionDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.FlowDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.NodeDefinition;
-import site.omagotchi.ruleservice.flow.domain.registry.NodeRegistry;
+import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.*;
@@ -21,13 +20,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class FlowManager {
 
     private final FlowEngine flowEngine;
     private final NodeRegistry nodeRegistry;
+    private final EngineActivePort engineActivePort;
     private final Map<String, FlowEntry> flowEntries = new ConcurrentHashMap<>();
-    private final Map<Activatable, Boolean> activationSnapshots = new ConcurrentHashMap<>();
+
+    public FlowManager(FlowEngine flowEngine,
+                       NodeRegistry nodeRegistry,
+                       @Lazy EngineActivePort engineActivePort) {
+
+        this.flowEngine = flowEngine;
+        this.nodeRegistry = nodeRegistry;
+        this.engineActivePort = engineActivePort;
+    }
 
     // deploy가 등록과 시작 한 번에 함
     // 검증 -> 노드 생성(NodeRegistry) -> 배선 -> FlowEngine 등록/시작 (중복 id는 예외)
@@ -104,31 +111,24 @@ public class FlowManager {
     public void start(String flowId) {
         this.requireEntry(flowId);
         flowEngine.start(flowId);
-        this.restoreActivationState(flowId); // 재기동 후 원래 활성 상태 복원
+        this.applyCurrentActivationState(flowId);
     }
+
 
     public void stop(String flowId) {
         this.requireEntry(flowId);
-        this.captureActivationState(flowId); // 끄기 전에 현재 활성 상태 기억
         flowEngine.stop(flowId);
     }
 
     public void restart(String flowId) {
         this.requireEntry(flowId);
-        this.captureActivationState(flowId);
         flowEngine.stop(flowId);
         flowEngine.start(flowId);
-        this.restoreActivationState(flowId);
+        this.applyCurrentActivationState(flowId);
     }
 
     public void remove(String flowId) {
         this.requireEntry(flowId);
-
-        // 제거 전에 activationSnapshots에서도 정리 (메모리 누수 방지)
-        // unregister/flowEntries.remove 전에 해야 노드 목록을 뽑을 수 있음
-        for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
-            this.activationSnapshots.remove(activatable);
-        }
 
         if (flowEngine.getState(flowId) == FlowState.RUNNING) {
             flowEngine.stop(flowId);
@@ -206,8 +206,9 @@ public class FlowManager {
     }
 
     /**
-     * 배포된 모든 플로우를 통틀어서 Activatable을 구현한 노드만 모아서 리턴
+     * 배포된 모든 플로우(전체 플로우 대상)를 통틀어서 Activatable을 구현한 노드만 모아서 리턴
      * EngineRoleService가 역할 전환 시 activate()/deactivate()를 지시할 대상
+     * getActivatableNodesOf()를 재사용 -> "멈춘 플로우 제외" 동작 상속받음
      */
     public List<Activatable> getActivatableNodes() {
         List<Activatable> activatables = new ArrayList<>();
@@ -220,9 +221,14 @@ public class FlowManager {
     }
 
     // 단일 플로우 안의 Activatable 노드만 모아서 리턴
-    // (stop/start/restart/remove의 상태 보존/정리용)
+    // 멈춰있는 플로우는 빈 목록 리턴
     private List<Activatable> getActivatableNodesOf(String flowId) {
         List<Activatable> activatables = new ArrayList<>();
+
+        if (this.flowEngine.getState(flowId) != FlowState.RUNNING) {
+            return activatables; // 멈춰있는 플로우의 노드는 활성화 대상에서 제외 (EngineRoleService가 건드리면 안 됨)
+        }
+
         FlowEntry flowEntry = this.flowEntries.get(flowId);
 
         for (NodeDefinition nodeDef : flowEntry.flowDefinition().nodes()) {
@@ -236,19 +242,17 @@ public class FlowManager {
         return activatables;
     }
 
-    private void captureActivationState(String flowId) {
-        for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
-            this.activationSnapshots.put(activatable, activatable.isActivated());
-        }
-    }
+    // 재기동 후 "지금 현재" 역할에 맞게 활성화 상태를 결정
+    // (stop 직전 상태를 기억해뒀다가 복원하는 방식은, 그 사이 failover로 역할이 바뀌면 옛날 상태를 복원하게 되어 옳지 않음)
+    private void applyCurrentActivationState(String flowId) {
+        boolean shouldBeActive = this.engineActivePort.isSelfActive();
 
-    private void restoreActivationState(String flowId) {
         for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
-            if (Boolean.TRUE.equals(this.activationSnapshots.get(activatable))) {
+            if (shouldBeActive) {
                 activatable.activate();
+            } else {
+                activatable.deactivate();
             }
-
-            // false이거나 기록 없음(최초 배포 직후 등)이면 원래도 비활성이니 그대로 둠
         }
     }
 
