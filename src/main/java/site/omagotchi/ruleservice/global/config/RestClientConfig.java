@@ -27,7 +27,7 @@ public class RestClientConfig {
      * connect/read 타임아웃을 각각 2초로 명시 - 이 값은 learning-service 호출과 무관하게, 엔진 생존 판정 폴링 주기(3초)보다 짧아야 한다는 distributed feature 자체의 요구사항에서 나온
      */
     @Bean
-    public RestClient enginePollingRestClient() {
+    public RestClient engineInternalRestClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(2_000); // 연결 타임아웃 2초
         factory.setReadTimeout(2_000); // 읽기 타임아웃 2초

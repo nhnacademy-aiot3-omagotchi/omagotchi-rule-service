@@ -36,7 +36,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private static final long OFFLINE_THRESHOLD_MS = 12_000L;
 
     private final DiscoveryClient discoveryClient;
-    private final RestClient enginePollingRestClient;
+    private final RestClient engineInternalRestClient;
     private final String applicationName;
     private final String selfEngineId;
     private final List<EnginePresenceListener> enginePresenceListeners;
@@ -49,14 +49,14 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private final Map<String, Long> lastPolledSuccessAt = new ConcurrentHashMap<>();
 
     public EngineDiscoveryService(DiscoveryClient discoveryClient,
-                                  RestClient enginePollingRestClient,
+                                  RestClient engineInternalRestClient,
                                   @Value("${spring.application.name}") String applicationName,
                                   @Value("${engine.id}") String selfEngineId,
                                   @Lazy List<EnginePresenceListener> enginePresenceListeners,
                                   Clock clock) {
 
         this.discoveryClient = discoveryClient;
-        this.enginePollingRestClient = enginePollingRestClient;
+        this.engineInternalRestClient = engineInternalRestClient;
         this.applicationName = applicationName;
         this.selfEngineId = selfEngineId;
         this.enginePresenceListeners = enginePresenceListeners;
@@ -105,7 +105,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
     private void pollOne(String peerEngineId, ServiceInstance instance) {
         try {
-            PeerSelfInfo response = this.enginePollingRestClient.get()
+            PeerSelfInfo response = this.engineInternalRestClient.get()
                     .uri("http://{host}:{port}/api/v1/engines/self", instance.getHost(), instance.getPort())
                     .retrieve()
                     .body(PeerSelfInfo.class);
