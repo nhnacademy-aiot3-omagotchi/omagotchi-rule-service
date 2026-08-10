@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
+import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
 import site.omagotchi.ruleservice.flow.domain.Flow;
 import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
@@ -25,15 +26,18 @@ public class FlowManager {
     private final FlowEngine flowEngine;
     private final NodeRegistry nodeRegistry;
     private final EngineActivePort engineActivePort;
+    private final PeerFlowSyncPort peerFlowSyncPort;
     private final Map<String, FlowEntry> flowEntries = new ConcurrentHashMap<>();
 
     public FlowManager(FlowEngine flowEngine,
                        NodeRegistry nodeRegistry,
-                       @Lazy EngineActivePort engineActivePort) {
+                       @Lazy EngineActivePort engineActivePort,
+                       @Lazy PeerFlowSyncPort peerFlowSyncPort) {
 
         this.flowEngine = flowEngine;
         this.nodeRegistry = nodeRegistry;
         this.engineActivePort = engineActivePort;
+        this.peerFlowSyncPort = peerFlowSyncPort;
     }
 
     // deploy가 등록과 시작 한 번에 함
@@ -108,19 +112,53 @@ public class FlowManager {
         return flow;
     }
 
+    // ---- start ----
+
+    // 공개 start 엔드포인트 전용 -> 로컬 적용 후 파트너에게도 전달
     public void start(String flowId) {
+        this.startLocally(flowId);
+        this.peerFlowSyncPort.syncStart(flowId);
+    }
+
+    // 내부 전용 start 엔드포인트 전용 - 파트너가 이미 결정한 걸 로컬에만 적용, 재전달X (무한루프 방지)
+    public void startFromPeer(String flowId) {
+        this.startLocally(flowId);
+    }
+
+    private void startLocally(String flowId) {
         this.requireEntry(flowId);
         flowEngine.start(flowId);
         this.applyCurrentActivationState(flowId);
     }
 
+    // ---- stop ----
 
     public void stop(String flowId) {
+        this.stopLocally(flowId);
+        this.peerFlowSyncPort.syncStop(flowId);
+    }
+
+    public void stopFromPeer(String flowId) {
+        this.stopLocally(flowId);
+    }
+
+    private void stopLocally(String flowId) {
         this.requireEntry(flowId);
         flowEngine.stop(flowId);
     }
 
+    // ---- restart ----
+
     public void restart(String flowId) {
+        this.restartLocally(flowId);
+        this.peerFlowSyncPort.syncRestart(flowId);
+    }
+
+    public void restartFromPeer(String flowId) {
+        this.restartLocally(flowId);
+    }
+
+    private void restartLocally(String flowId) {
         this.requireEntry(flowId);
         flowEngine.stop(flowId);
         flowEngine.start(flowId);

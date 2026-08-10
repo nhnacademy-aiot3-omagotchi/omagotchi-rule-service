@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
@@ -27,11 +28,14 @@ class FlowConfigServiceTest {
     @Mock
     private FlowManager flowManager;
 
+    @Mock
+    private PeerFlowSyncPort peerFlowSyncPort;
+
     private FlowConfigService flowConfigService;
 
     @BeforeEach
     void setUp() {
-        flowConfigService = new FlowConfigService(flowManager);
+        flowConfigService = new FlowConfigService(flowManager, peerFlowSyncPort);
     }
 
     @Test
