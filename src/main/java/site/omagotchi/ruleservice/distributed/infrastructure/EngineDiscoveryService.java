@@ -8,6 +8,7 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
 import site.omagotchi.ruleservice.distributed.application.port.EnginePresenceListener;
@@ -33,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 )
 public class EngineDiscoveryService implements EngineDirectoryPort {
 
-    //    private static final long OFFLINE_THRESHOLD_MS = 12_000L;
     private static final long OFFLINE_THRESHOLD_MS = 4_000L; // 12초 -> 4초로 변경 (테스트) (폴링 1초 기준 약 3번 연속 실패 필요)
 
     private final DiscoveryClient discoveryClient;
@@ -42,6 +42,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private final String selfEngineId;
     private final List<EnginePresenceListener> enginePresenceListeners;
     private final Clock clock;
+    private final Set<String> authFailureWarned = ConcurrentHashMap.newKeySet(); // 동시성 문제 X
 
     // peerEngineId -> 현재 알려진 정보(판정된 presenceStatus 포함)
     private final Map<String, EngineInfo> knownEngines = new ConcurrentHashMap<>();
@@ -112,6 +113,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     .retrieve()
                     .body(PeerSelfInfo.class);
 
+            this.authFailureWarned.remove(peerEngineId); // 복구되면 다음 실패 때 다시 경고할 수 있도록 초기화
+
             PresenceStatus previousStatus = this.resolvePreviousStatus(peerEngineId);
 
             this.knownEngines.put(peerEngineId, new EngineInfo(
@@ -125,21 +128,34 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             ));
 
             this.lastPolledSuccessAt.put(peerEngineId, this.clock.millis());
+
+        } catch (HttpClientErrorException.Forbidden e) {
+            // 네트웍은 살아있는데 인증에서 거부됨 - 대부분 INTERNAL_SHARED_SECRET 불일치
+            // 방치하면 실제 네트웍 장애와 똑같이 '폴링 실패'로만 보여서 원인 특정 어려움
+
+            if (this.authFailureWarned.add(peerEngineId)) { // 이 피어에 대해 처음 경고하는 거면 true일 것임
+                log.warn("[{}] 폴링 인증 실패 (host = {}, port = {}) - INTERNAL_SHARED_SECRET이 양쪽 엔진에 동일하게 설정됐는지 확인하세요", peerEngineId, instance.getHost(), instance.getPort());
+            }
+
+            this.markFailure(peerEngineId, instance);
         } catch (Exception e) {
             log.debug("[{}] 폴링 실패 (host = {}, port = {})", peerEngineId, instance.getHost(), instance.getPort(), e);
-
-            // 처음 보는 피어에게는 유예를 줌 - 지금 막 발견됐다는 이유만으로 바로 OFFLINE 판정하지 않음
-            this.lastPolledSuccessAt.putIfAbsent(peerEngineId, this.clock.millis());
-            this.knownEngines.putIfAbsent(peerEngineId, new EngineInfo(
-                    peerEngineId,
-                    instance.getHost(),
-                    instance.getPort(),
-                    parsePriority(instance.getMetadata().get("engine-priority")),
-                    0L, // startedAt
-                    PresenceStatus.ONLINE, // 첫 발견 유예
-                    null // 폴링 실패라 engineRole을 아직 모름
-            ));
+            this.markFailure(peerEngineId, instance);
         }
+    }
+
+    private void markFailure(String peerEngineId, ServiceInstance instance) {
+        // 처음 보는 피어에게는 유예를 줌 - 지금 막 발견됐다는 이유만으로 바로 OFFLINE 판정하지 않음
+        this.lastPolledSuccessAt.putIfAbsent(peerEngineId, this.clock.millis());
+        this.knownEngines.putIfAbsent(peerEngineId, new EngineInfo(
+                peerEngineId,
+                instance.getHost(),
+                instance.getPort(),
+                parsePriority(instance.getMetadata().get("engine-priority")),
+                0L, // startedAt
+                PresenceStatus.ONLINE, // 첫 발견 유예
+                null // 폴링 실패라 engineRole을 아직 모름
+        ));
     }
 
     private PresenceStatus resolvePreviousStatus(String peerEngineId) {
