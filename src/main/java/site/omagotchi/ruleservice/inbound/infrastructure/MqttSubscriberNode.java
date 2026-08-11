@@ -150,27 +150,24 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     }
 
     /**
-     * cleanStart(false)라 재연결 시 브로커가 이전 세션의 구독을 자동 복원함
-     * STANDBY 상태(activated=false)인데 구독이 되살아나면 안 되므로, 재연결 때마다 현재 게이트 상태와 맞춰줌
+     * cleanStart(false)라 브로커가 이전 세션의 구독을 기억함
+     * 같은 프로세스의 재연결 뿐만 아니라, 프로세스가 통째로 재시작돼서 같은 clientId로 새로 연결하는 경우에도 브로커가 예전 구독을 그대로 복원해서 activate() 호출 없이 메시지를 밀어줄 수 있음
+     * 그래서 연결이 완료될 때마다(최초 연결 포함) 현재 게이트 상태(activated)와 브로커 쪽 구독 상태를 항상 맞춰줌
      */
     @Override
     public synchronized void connectComplete(boolean reconnect, String serverURI) {
         log.info("[{}] MQTT 연결 완료 (reconnect={}, serverURI={})", getId(), reconnect, serverURI);
 
-        if (!reconnect) {
-            return;
-        }
-
         try {
             if (activated) {
                 mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
-                log.info("[{}] 재연결 후 구독 복원 (topicFilter = {})", getId(), topicFilter);
+                log.info("[{}] 연결 완료 후 구독 상태 확인 (topicFilter = {})", getId(), topicFilter);
             } else {
                 mqttAsyncClient.unsubscribe(topicFilter).waitForCompletion();
-                log.info("[{}] 재연결 후 STANDBY 상태이므로 구독 해제 (topicFilter = {})", getId(), topicFilter);
+                log.info("[{}] 연결 완료 후 STANDBY 상태이므로 구독 해제 확인 (topicFilter = {})", getId(), topicFilter);
             }
         } catch (MqttException e) {
-            log.error("[{}] 재연결 후 구독 상태 동기화 실패 (topicFilter = {})", getId(), topicFilter, e);
+            log.error("[{}] 연결 후 구독 상태 동기화 실패 (topicFilter = {})", getId(), topicFilter, e);
         }
     }
 
