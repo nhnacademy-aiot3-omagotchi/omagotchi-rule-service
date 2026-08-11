@@ -32,7 +32,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     private volatile boolean activated = false;
 
     public MqttSubscriberNode(String id, String brokerUrl, String clientId, String username, String password, String topicFilter
-                              , MeterRegistry meterRegistry) {
+            , MeterRegistry meterRegistry) {
         super(id);
 
         this.brokerUrl = brokerUrl;
@@ -80,8 +80,6 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
 
             // 브로커 연결 시도
             mqttAsyncClient.connect(mqttConnectionOptions).waitForCompletion();
-            //토픽으로 구독 신청
-            mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
 
         } catch (MqttException e) {
             log.error("[{}] MQTT 초기화 실패 (brokerUrl={})", getId(), brokerUrl, e);
@@ -97,7 +95,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
         }
 
         try {
-            mqttAsyncClient.subscribe(topicFilter, 1);
+            mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
             activated = true;
             log.info("[{}] 구독 시작 (topicFilter = {})", getId(), topicFilter);
         } catch (MqttException e) {
@@ -113,7 +111,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
         }
 
         try {
-            mqttAsyncClient.unsubscribe(topicFilter);
+            mqttAsyncClient.unsubscribe(topicFilter).waitForCompletion();
             activated = false;
             log.info("[{}] 구독 중단 (topicFilter = {})", getId(), topicFilter);
         } catch (MqttException e) {
@@ -165,10 +163,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
 
         try {
             if (activated) {
-                mqttAsyncClient.subscribe(topicFilter, 1);
+                mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
                 log.info("[{}] 재연결 후 구독 복원 (topicFilter = {})", getId(), topicFilter);
             } else {
-                mqttAsyncClient.unsubscribe(topicFilter);
+                mqttAsyncClient.unsubscribe(topicFilter).waitForCompletion();
                 log.info("[{}] 재연결 후 STANDBY 상태이므로 구독 해제 (topicFilter = {})", getId(), topicFilter);
             }
         } catch (MqttException e) {

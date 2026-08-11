@@ -135,6 +135,17 @@ class MqttSubscriberNodeStandbyTest {
         assertThat(publishUntilReceived("after-restart-should-arrive", 1)).hasSize(1);
     }
 
+    @Test
+    @DisplayName("initialize 직후 activate 없이 바로 deactivate 해도 메시지를 수신하지 않는다")
+    void doesNotReceiveMessageWhenNeverActivated() throws Exception {
+        node.deactivate(); // activate() 호출 이력 없이 바로 STANDBY 배정되는 실제 상황 재현
+
+        publish("should-not-arrive-cold-standby");
+
+        Thread.sleep(2000);
+        assertThat(outConnection.messages()).isEmpty();
+    }
+
     /**
      * node의 재구독 완료 시점을 테스트에서 직접 관찰할 방법이 없어서,
      * 메시지가 도착할 때까지 주기적으로 재발행하며 기다림 (publisher 재연결과 node 재구독 완료 시점의 경쟁 상태 흡수)
