@@ -9,8 +9,7 @@ public record ThresholdRule(
         String metric,
         Operator operator,
         double threshold,
-        long ruleVersion,
-        long updatedAt
+        long ruleVersion
 ) {
 
     public ThresholdRule {
