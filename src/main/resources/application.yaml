@@ -152,3 +152,6 @@ quality:
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [requestId=%X{requestId:-}] [traceId=%X{traceId:-}] %m%n%wEx"
+
+internal:
+  shared-secret: ${INTERNAL_SHARED_SECRET}

@@ -15,6 +15,10 @@ auth:
     # TestJwtKeyConfig가 메모리에서 생성한 공개키 Bean을 제공
     public-key-location: classpath:unused-test-key.pem
 
+# @ConfigurationPropertiesScan이 있어서 프로퍼티 빈이 항상 생성되고, 생성자에서 null/blank면 예외 던지므로, 컨텍스트 안 깨지도록.
 engine:
   id: test-engine
   priority: 1
+
+internal:
+  shared-secret: test-shared-secret
