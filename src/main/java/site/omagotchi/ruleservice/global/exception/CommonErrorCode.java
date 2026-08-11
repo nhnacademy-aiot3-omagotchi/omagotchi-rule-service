@@ -26,7 +26,7 @@ public enum CommonErrorCode implements ErrorCode {
      */
     INTERNAL_SERVER_ERROR(
             ErrorType.INTERNAL,
-            "COMMON_INTERNAL_ERROR",
+            "COMMON_INTERNAL_SERVER_ERROR",
             "서버 내부 오류가 발생했습니다."
     );
 
