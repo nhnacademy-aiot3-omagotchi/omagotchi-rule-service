@@ -43,7 +43,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 "/api/v1/internal/**" // flows/**, engines/self 전부 포함
-                        ).permitAll()
+                        ).permitAll() // Spring Security 레벨은 통과, 실제 검증은 InternalServiceAuthFilter가 공유 시크릿 헤더 검증
                         // 룰 캐시와 플로우 제어 API는 운영 화면의 시스템 관리자 기능
                         .requestMatchers(
                                 "/api/v1/rules",
