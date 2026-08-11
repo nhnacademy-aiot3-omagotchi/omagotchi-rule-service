@@ -48,7 +48,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityErrorResponseHandler.class,
         TestJwtKeyConfig.class
 })
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        InternalAuthProperties.class
+})
 @ActiveProfiles("test")
 class RuleSecurityMvcTest {
 

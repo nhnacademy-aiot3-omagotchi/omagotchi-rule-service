@@ -6,6 +6,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -17,16 +19,18 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class InternalServiceAuthFilter extends OncePerRequestFilter {
 
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+    private static final String MDC_REQUEST_ID_KEY = "requestId";
 
     private final InternalAuthProperties internalAuthProperties;
     private final ObjectMapper objectMapper;
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+    protected boolean shouldNotFilter(HttpServletRequest request) {
         return !request.getRequestURI().startsWith("/api/v1/internal/");
     }
 
@@ -35,7 +39,7 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
         String token = request.getHeader(INTERNAL_TOKEN_HEADER);
 
         if (!Objects.equals(token, this.internalAuthProperties.sharedSecret())) {
-            this.reject(response, request.getRequestURI());
+            this.reject(request, response);
 
             return;
         }
@@ -43,7 +47,11 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void reject(HttpServletResponse response, String path) throws IOException {
+    private void reject(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String path = request.getRequestURI();
+
+        log.warn("[{}] 공유 시크릿 헤더 검증 실패 - 접근 거부 (remoteAddr = {})", path, request.getRemoteAddr());
+
         response.setStatus(HttpStatus.FORBIDDEN.value());
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -54,7 +62,7 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
                 SecurityErrorCode.ACCESS_DENIED.code(),
                 SecurityErrorCode.ACCESS_DENIED.message(),
                 path,
-                null
+                MDC.get(MDC_REQUEST_ID_KEY)
         );
 
         this.objectMapper.writeValue(response.getOutputStream(), body);
