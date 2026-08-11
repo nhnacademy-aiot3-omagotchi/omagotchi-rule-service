@@ -38,8 +38,7 @@ class InMemoryRuleCacheTest {
                 "temperature",
                 Operator.GT,
                 20.0,
-                1L,
-                System.currentTimeMillis()
+                1L
         );
 
         boolean appliedNewer = inMemoryRuleCache.apply(newThresholdRule);
@@ -67,14 +66,14 @@ class InMemoryRuleCacheTest {
 
         // 캐시 세팅 아이디가 3인 룰만 정상적으로 들어감
         // 나머지는 같은 버전이 연속으로 들어가고있으므로 실패
-        inMemoryRuleCache.apply(new ThresholdRule(1L, "test-eui1", "temperature", Operator.GT, 30.0,2L ,System.currentTimeMillis()));
-        inMemoryRuleCache.apply(new ThresholdRule(2L, "test-eui2", "temperature", Operator.GT, 30.0,2L ,System.currentTimeMillis()));
-        inMemoryRuleCache.apply(new ThresholdRule(3L, "test-eui3", "temperature", Operator.GT, 30.0,1L ,System.currentTimeMillis()));
+        inMemoryRuleCache.apply(new ThresholdRule(1L, "test-eui1", "temperature", Operator.GT, 30.0,2L ));
+        inMemoryRuleCache.apply(new ThresholdRule(2L, "test-eui2", "temperature", Operator.GT, 30.0,2L ));
+        inMemoryRuleCache.apply(new ThresholdRule(3L, "test-eui3", "temperature", Operator.GT, 30.0,1L ));
 
         List<ThresholdRule> inputs = new ArrayList<>();
-        inputs.add(new ThresholdRule(1L, "test-eui1", "temperature", Operator.GT, 20.0,2L ,System.currentTimeMillis()));
-        inputs.add(new ThresholdRule(2L, "test-eui2", "temperature", Operator.GT, 20.0,2L ,System.currentTimeMillis()));
-        inputs.add(new ThresholdRule(3L, "test-eui3", "temperature", Operator.GT, 20.0,2L ,System.currentTimeMillis()));
+        inputs.add(new ThresholdRule(1L, "test-eui1", "temperature", Operator.GT, 20.0,2L ));
+        inputs.add(new ThresholdRule(2L, "test-eui2", "temperature", Operator.GT, 20.0,2L ));
+        inputs.add(new ThresholdRule(3L, "test-eui3", "temperature", Operator.GT, 20.0,2L ));
 
         int count = inMemoryRuleCache.replaceAll(inputs);
 
@@ -89,8 +88,7 @@ class InMemoryRuleCacheTest {
                 "temperature",
                 Operator.GT,
                 20.0,
-                2L,
-                System.currentTimeMillis()
+                2L
         );
     }
 }

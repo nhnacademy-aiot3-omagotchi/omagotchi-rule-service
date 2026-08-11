@@ -48,7 +48,7 @@ class RuleSyncListenerTest {
         rabbitTemplate.convertAndSend(
                 RuleSyncListener.RULE_UPDATED_EXCHANGE,
                 "",
-                new RuleResponse(1L, "eui-1", "co2", "GT", 1000.0, 1L, 0L)
+                new RuleResponse(1L, "eui-1", "co2", "GT", 1000.0, 1L)
         );
 
         long deadline = System.currentTimeMillis() + 5000;
@@ -67,7 +67,7 @@ class RuleSyncListenerTest {
         rabbitTemplate.convertAndSend(
                 RuleSyncListener.RULE_UPDATED_EXCHANGE,
                 "",
-                new RuleResponse(1L, "eui-1", "co2", "말도 안되는 비교연산자", 1000.0, 1L, 0L)
+                new RuleResponse(1L, "eui-1", "co2", "말도 안되는 비교연산자", 1000.0, 1L)
         );
 
         long deadline = System.currentTimeMillis() + 5000;
