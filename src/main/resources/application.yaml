@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT}
 
 spring:
   application:
@@ -17,26 +17,26 @@ spring:
           initial-interval: 1000ms
           multiplier: 2
           max-interval: 10000ms
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
     publisher-confirm-type: correlated
 #    publisher-returns: true # routqueue를 만들지 않고 해당 옵션으로 콜백 메서드 처리도 되는듯
 
 # RestClientConfig에서 Core API
 core:
-  base-url: ${CORE_BASE_URL:temp} # Core 쪽 정해지면 그때 넣어야 함
+  base-url: ${CORE_BASE_URL}
 
 eureka:
   client:
-    enabled: ${EUREKA_ENABLED:true}
+    enabled: ${EUREKA_ENABLED}
     register-with-eureka: true
     fetch-registry: true
     healthcheck:
       enabled: true
     serviceUrl:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_URL}
 
   instance:
     prefer-ip-address: true
@@ -55,21 +55,21 @@ management:
 
 auth:
   jwt:
-    issuer: ${JWT_ISSUER:https://identity.omagotchi.local}
-    audience: ${JWT_AUDIENCE:omagotchi-api}
-    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:./secrets/jwt-public.pem}
+    issuer: ${JWT_ISSUER}
+    audience: ${JWT_AUDIENCE}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
 
-#fixme
 sensor:
   broker-url: ${SENSOR_BROKER_URL}
   client-id: ${SENSOR_CLIENT_ID}
+  # Broker가 익명 연결을 허용하면 비워 둘 수 있음
   username: ${SENSOR_USERNAME:}
   password: ${SENSOR_PASSWORD:}
 
 influx:
-  url: ${INFLUXDB_URL:http://localhost:8086}
-  token: ${INFLUXDB_TOKEN:token}
-  org: ${INFLUXDB_ORG_ID:org}
+  url: ${INFLUXDB_URL}
+  token: ${INFLUXDB_TOKEN}
+  org: ${INFLUXDB_ORG_ID}
   buckets:
     raw: omagotchi-raw
     avg-1h: omagotchi-avg-1h
