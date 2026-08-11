@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Eureka에 등록된 rule-service 피어 목록을 조회하고, 각 피어의 GET /api/v1/engines/self를 직접 폴링해서 ONLINE/OFFLINE을 판정
+ * Eureka에 등록된 rule-service 피어 목록을 조회하고, 각 피어의 GET /api/v1/internal/engines/self를 직접 폴링해서 ONLINE/OFFLINE을 판정
  * Eureka는 주소 해결에만 사용하고, 생존 판정은 이 폴링 결과로만 함(Eureka의 lease/eviction 미사용)
  */
 @Slf4j
@@ -108,7 +108,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private void pollOne(String peerEngineId, ServiceInstance instance) {
         try {
             PeerSelfInfo response = this.engineInternalRestClient.get()
-                    .uri("http://{host}:{port}/api/v1/engines/self", instance.getHost(), instance.getPort())
+                    .uri("http://{host}:{port}/api/v1/internal/engines/self", instance.getHost(), instance.getPort())
                     .retrieve()
                     .body(PeerSelfInfo.class);
 

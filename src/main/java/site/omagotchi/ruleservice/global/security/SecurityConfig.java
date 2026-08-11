@@ -41,12 +41,17 @@ public class SecurityConfig {
                                 "/actuator/health/**",
                                 "/actuator/info"
                         ).permitAll()
+                        .requestMatchers(
+                                "/api/v1/internal/**" // flows/**, engines/self 전부 포함
+                        ).permitAll()
                         // 룰 캐시와 플로우 제어 API는 운영 화면의 시스템 관리자 기능
                         .requestMatchers(
                                 "/api/v1/rules",
                                 "/api/v1/rules/**",
                                 "/api/v1/flows",
-                                "/api/v1/flows/**"
+                                "/api/v1/flows/**",
+                                "/api/v1/engines",
+                                "/api/v1/recovery/**"
                         ).hasRole("SYSTEM_ADMIN")
                         // 새 경로를 실수로 공개하지 않도록 명시된 경계 밖은 거부
                         .anyRequest().denyAll()

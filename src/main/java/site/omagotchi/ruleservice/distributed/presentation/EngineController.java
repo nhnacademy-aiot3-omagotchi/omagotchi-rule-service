@@ -30,16 +30,6 @@ public class EngineController {
     private final EngineRoleService engineRoleService;
     private final EngineDirectoryPort engineDirectoryPort;
 
-    @GetMapping("/self")
-    public ResponseEntity<EngineSummaryResponse> self() {
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(EngineSummaryResponse.from(
-                        this.engineIdentityResolver.getSelf(), // EngineInfo
-                        this.engineRoleService.getCurrentRole() // EngineRole
-                ));
-    }
-
     @GetMapping
     public ResponseEntity<List<EngineSummaryResponse>> engineList() {
         List<EngineSummaryResponse> engines = new ArrayList<>();

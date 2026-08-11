@@ -30,7 +30,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class EngineDiscoveryServiceTest {
 
     private static final long OFFLINE_THRESHOLD_MS = 12_000L;
-    private static final String PEER_URL = "http://peer-host:8082/api/v1/engines/self";
+    private static final String PEER_URL = "http://peer-host:8082/api/v1/internal/engines/self";
     private static final String PEER_RESPONSE = """
             {"engineId":"engine-b","host":"peer-host","port":8082,"priority":2,"startedAt":0,"engineRole":"STANDBY"}
             """;
