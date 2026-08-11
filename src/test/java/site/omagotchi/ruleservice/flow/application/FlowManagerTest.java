@@ -13,6 +13,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
+import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.ConnectionDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.FlowDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.NodeDefinition;
@@ -257,6 +258,87 @@ class FlowManagerTest {
             inOrder.verify(flowEngine).stop("flow-1");
             inOrder.verify(flowEngine).start("flow-1");
         }
+
+        @Test
+        @DisplayName("start()는 로컬 적용 후 peerFlowSyncPort.syncStart를 호출한다")
+        void startCallsPeerSyncStart() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+
+            flowManager.deploy(flowDef);
+
+            flowManager.start("flow-1");
+
+            verify(peerFlowSyncPort).syncStart("flow-1");
+        }
+
+        @Test
+        @DisplayName("startFromPeer()는 syncStart를 호출하지 않는다 (재전달 방지)")
+        void startFromPeerDoesNotResync() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+
+            flowManager.deploy(flowDef);
+            flowManager.startFromPeer("flow-1");
+
+            verify(peerFlowSyncPort, never()).syncStart(any());
+        }
+
+        @Test
+        @DisplayName("stop()은 로컬 적용 후 peerFlowSyncPort.syncStop을 호출한다")
+        void stopCallsPeerSyncStop() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            flowManager.stop("flow-1");
+
+            verify(peerFlowSyncPort).syncStop("flow-1");
+        }
+
+        @Test
+        @DisplayName("stopFromPeer()는 syncStop을 호출하지 않는다 (재전달 방지)")
+        void stopFromPeerDoesNotResync() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            flowManager.stopFromPeer("flow-1");
+
+            verify(peerFlowSyncPort, never()).syncStop(any());
+        }
+
+        @Test
+        @DisplayName("restart()는 로컬 적용 후 peerFlowSyncPort.syncRestart를 호출한다")
+        void restartCallsPeerSyncRestart() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            flowManager.restart("flow-1");
+
+            verify(peerFlowSyncPort).syncRestart("flow-1");
+        }
+
+        @Test
+        @DisplayName("restartFromPeer()는 syncRestart를 호출하지 않는다 (재전달 방지)")
+        void restartFromPeerDoesNotResync() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            flowManager.restartFromPeer("flow-1");
+
+            verify(peerFlowSyncPort, never()).syncRestart(any());
+        }
     }
 
     @Nested
@@ -398,6 +480,72 @@ class FlowManagerTest {
 
             assertThatThrownBy(() -> flowManager.getNodeConfig("flow-1", "ghost-node"))
                     .isInstanceOf(BusinessException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Activatable 노드의 활성화 상태 반영")
+    class ActivationState {
+
+        @Test
+        @DisplayName("start() 후 이 엔진이 ACTIVE면 Activatable 노드가 activate된다")
+        void startActivatesNodeWhenSelfActive() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            FakeActivatableNode node = new FakeActivatableNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            when(flowEngine.getState("flow-1")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(node);
+            when(engineActivePort.isSelfActive()).thenReturn(true);
+            flowManager.deploy(flowDef);
+
+            flowManager.start("flow-1");
+
+            assertThat(node.isActivated()).isTrue();
+        }
+
+        @Test
+        @DisplayName("start() 후 이 엔진이 STANDBY면 Activatable 노드가 deactivate된다")
+        void startDeactivatesNodeWhenSelfStandby() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            FakeActivatableNode node = new FakeActivatableNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            when(flowEngine.getState("flow-1")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(node);
+            when(engineActivePort.isSelfActive()).thenReturn(false);
+            flowManager.deploy(flowDef);
+
+            flowManager.start("flow-1");
+
+            assertThat(node.isActivated()).isFalse();
+        }
+
+        @Test
+        @DisplayName("getActivatableNodes()는 STOPPED 상태인 플로우의 노드는 제외한다")
+        void getActivatableNodesExcludesStoppedFlow() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            FakeActivatableNode node = new FakeActivatableNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            when(flowEngine.getState("flow-1")).thenReturn(FlowState.STOPPED);
+            flowManager.deploy(flowDef);
+
+            List<Activatable> activatables = flowManager.getActivatableNodes();
+
+            assertThat(activatables).isEmpty();
+        }
+
+        @Test
+        @DisplayName("getActivatableNodes()는 RUNNING 상태인 플로우의 Activatable 노드는 포함한다")
+        void getActivatableNodesIncludesRunningFlow() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            FakeActivatableNode node = new FakeActivatableNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            when(flowEngine.getState("flow-1")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(node);
+            flowManager.deploy(flowDef);
+
+            List<Activatable> activatables = flowManager.getActivatableNodes();
+
+            assertThat(activatables).containsExactly(node);
         }
     }
 }

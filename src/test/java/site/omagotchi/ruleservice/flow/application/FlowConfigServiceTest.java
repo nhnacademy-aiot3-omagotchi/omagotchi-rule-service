@@ -137,4 +137,46 @@ class FlowConfigServiceTest {
                 flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 200)))
                 .isInstanceOf(BusinessException.class);
     }
+
+    @Test
+    @DisplayName("reconfigure()는 로컬 적용 후 peerFlowSyncPort.syncReconfigure를 호출한다")
+    void reconfigureCallsPeerSyncReconfigureTest() {
+
+        FakeReconfigurableNode node = new FakeReconfigurableNode(NODE_ID, 100);
+        when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(node);
+        when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
+
+        Map<String, Object> newConfig = Map.of("threshold", 200);
+        flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig);
+
+        verify(peerFlowSyncPort).syncReconfigure(FLOW_ID, NODE_ID, newConfig);
+    }
+
+    @Test
+    @DisplayName("reconfigureFromPeer()는 syncReconfigure를 호출하지 않는다 (재전달 방지)")
+    void reconfigureFromPeerDoesNotResyncTest() {
+
+        FakeReconfigurableNode node = new FakeReconfigurableNode(NODE_ID, 100);
+        when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(node);
+        when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
+
+        flowConfigService.reconfigureFromPeer(FLOW_ID, NODE_ID, Map.of("threshold", 200));
+
+        verify(peerFlowSyncPort, never()).syncReconfigure(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("로컬 적용이 실패하면 syncReconfigure는 호출되지 않는다")
+    void reconfigureDoesNotSyncWhenLocalApplyFailsTest() {
+
+        FakeReconfigurableNode node = new FakeReconfigurableNode(NODE_ID, 100);
+        when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(node);
+        when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
+
+        assertThatThrownBy(() ->
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", -1)))
+                .isInstanceOf(BusinessException.class);
+
+        verify(peerFlowSyncPort, never()).syncReconfigure(any(), any(), any());
+    }
 }
