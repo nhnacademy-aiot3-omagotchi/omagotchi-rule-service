@@ -39,7 +39,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/health/**",
-                                "/actuator/info"
+                                "/actuator/info",
+                                "/actuator/metrics/**"
                         ).permitAll()
                         // 룰 캐시와 플로우 제어 API는 운영 화면의 시스템 관리자 기능
                         .requestMatchers(

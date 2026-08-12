@@ -131,9 +131,6 @@ quality:
     - deviceEui: "24e124725d089152"
       measurement: "temperature"
       expectedIntervalSeconds: 600
-    - deviceEui: "sim-0002"
-      measurement: "co2"
-      expectedIntervalSeconds: 10
 
 
 # 로그 패턴에 두 MDC값 모두 노출
