@@ -221,4 +221,40 @@ class EngineDiscoveryServiceTest {
                 .count();
         assertThat(authWarnCount).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("AUTH_FAILED였다가 폴링이 성공하면 즉시 ONLINE으로 복귀한다")
+    void recoversToOnlineImmediatelyAfterAuthFailure() {
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers(); // AUTH_FAILED
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.AUTH_FAILED);
+
+        this.engineDiscoveryService.pollPeers(); // 시크릿 복구 - 성공
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.ONLINE);
+    }
+
+    @Test
+    @DisplayName("Eureka가 이번 주기에 빈 목록을 줘도(discovery-service 장애 흉내), 이미 아는 피어는 직접 폴링을 이어가 ONLINE을 유지한다")
+    void continuesPollingKnownPeerWhenEurekaReturnsEmpty() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance))
+                .thenReturn(List.of()); // 두 번째 주기부터 Eureka가 빈 목록
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers(); // 1주기 - Eureka로 발견, ONLINE
+
+        this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS - 1));
+        this.engineDiscoveryService.pollPeers(); // 2주기 - Eureka는 빈 목록이지만 폴백 폴링으로 여전히 성공
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.ONLINE);
+    }
 }
