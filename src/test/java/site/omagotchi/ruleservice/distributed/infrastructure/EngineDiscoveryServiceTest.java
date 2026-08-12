@@ -168,21 +168,19 @@ class EngineDiscoveryServiceTest {
     }
 
     @Test
-    @DisplayName("403(인증 실패)도 OFFLINE_THRESHOLD_MS가 지나면 500과 동일하게 OFFLINE으로 판정된다")
-    void marksOfflineOnForbiddenSameAsServerError() {
+    @DisplayName("403(인증 실패)은 500과 다르게 OFFLINE_THRESHOLD_MS가 지나도 AUTH_FAILED로 유지된다")
+    void marksAuthFailedOnForbiddenUnlikeServerError() {
         when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
 
-        this.restServiceServer.expect(requestTo(PEER_URL))
-                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
-        this.restServiceServer.expect(requestTo(PEER_URL))
-                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
 
         this.engineDiscoveryService.pollPeers(); // ONLINE
 
         this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS + 1));
-        this.engineDiscoveryService.pollPeers(); // 403 - 폴링 실패와 동일 취급
+        this.engineDiscoveryService.pollPeers(); // 403
 
-        assertThat(this.engineDiscoveryService.listEngines().get(0).presenceStatus()).isEqualTo(PresenceStatus.OFFLINE);
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.AUTH_FAILED);
     }
 
     @Test
