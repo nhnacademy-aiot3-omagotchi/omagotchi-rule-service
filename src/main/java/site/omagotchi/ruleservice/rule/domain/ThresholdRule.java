@@ -11,7 +11,6 @@ public record ThresholdRule(
         double threshold,
         long ruleVersion
 ) {
-
     public ThresholdRule {
 
         if (Objects.isNull(deviceEui) || deviceEui.isBlank()) {
@@ -32,16 +31,33 @@ public record ThresholdRule(
 
     }
 
-    /** 룰 버전을 비교하여 최신인지를 확인*/
+    public static ThresholdRule of(
+            Long ruleId,
+            String deviceEui,
+            String metric,
+            String operator,
+            Double threshold,
+            Long ruleVersion) {
+
+        if (Objects.isNull(ruleId) || Objects.isNull(threshold) || Objects.isNull(ruleVersion)) {
+            throw new IllegalArgumentException("필수 필드 누락 ruleId= %s, threshold=%s, ruleVersion= %s"
+                    .formatted(ruleId, threshold, ruleVersion));
+        }
+
+        return new ThresholdRule(ruleId, deviceEui, metric, Operator.from(operator), threshold, ruleVersion);
+    }
+
+    /**
+     * 룰 버전을 비교하여 최신인지를 확인
+     */
     public boolean isNewerThan(ThresholdRule other) {
         return other == null || this.ruleVersion > other.ruleVersion;
     }
 
-
-    /** 임계값과 비교연산자를 통해서 자동으로 연산*/
+    /**
+     * 임계값과 비교연산자를 통해서 자동으로 연산
+     */
     public boolean ruleHit(double value) {
         return operator.matches(value, threshold);
     }
-
-
 }
