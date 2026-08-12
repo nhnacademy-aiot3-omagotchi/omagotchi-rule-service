@@ -173,7 +173,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("호출 계약 위반을 500(COMMON_INTERNAL_ERROR)으로 숨김")
+    @DisplayName("호출 계약 위반을 500(COMMON_INTERNAL_SERVER_ERROR)으로 숨김")
     void hidesIllegalArgumentException() {
         // Given
         when(request.getMethod()).thenReturn("POST");
@@ -186,12 +186,12 @@ class GlobalExceptionHandlerTest {
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_ERROR");
+        assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_SERVER_ERROR");
         assertThat(response.getBody().message()).isEqualTo(CommonErrorCode.INTERNAL_SERVER_ERROR.message());
     }
 
     @Test
-    @DisplayName("내부 상태 위반을 500(COMMON_INTERNAL_ERROR)으로 숨김")
+    @DisplayName("내부 상태 위반을 500(COMMON_INTERNAL_SERVER_ERROR)으로 숨김")
     void hidesIllegalStateException() {
         // Given
         when(request.getMethod()).thenReturn("POST");
@@ -204,7 +204,7 @@ class GlobalExceptionHandlerTest {
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_ERROR");
+        assertThat(response.getBody().code()).isEqualTo("COMMON_INTERNAL_SERVER_ERROR");
         assertThat(response.getBody().message()).isEqualTo(CommonErrorCode.INTERNAL_SERVER_ERROR.message());
     }
 

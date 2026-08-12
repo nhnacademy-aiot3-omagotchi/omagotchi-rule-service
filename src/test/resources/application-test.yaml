@@ -1,12 +1,25 @@
+server:
+  port: 0
+
 eureka:
   client:
     # 테스트에서 실행 중인 Discovery Service에 연결하지 않음
     enabled: false
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
 
 spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: test
+    password: test
   cloud:
     discovery:
       enabled: false
+
+core:
+  base-url: http://localhost:8084
 
 auth:
   jwt:
@@ -14,3 +27,14 @@ auth:
     audience: omagotchi-api
     # TestJwtKeyConfig가 메모리에서 생성한 공개키 Bean을 제공
     public-key-location: classpath:unused-test-key.pem
+
+sensor:
+  broker-url: tcp://localhost:1883
+  client-id: rule-service-test
+  username: ""
+  password: ""
+
+influx:
+  url: http://localhost:8086
+  token: test-only-influx-token
+  org: test-org
