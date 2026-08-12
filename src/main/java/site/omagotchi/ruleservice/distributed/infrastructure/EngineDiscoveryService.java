@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 )
 public class EngineDiscoveryService implements EngineDirectoryPort {
 
-    private static final long OFFLINE_THRESHOLD_MS = 4_000L; // 12초 -> 4초로 변경 (테스트) (폴링 1초 기준 약 3번 연속 실패 필요)
+    private static final long OFFLINE_THRESHOLD_MS = 3_000L;
 
     private final DiscoveryClient discoveryClient;
     private final RestClient engineInternalRestClient;
@@ -76,7 +76,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
         return List.copyOf(this.knownEngines.values());
     }
 
-    @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.SECONDS) // 폴링 간격 3초 -> 1초 (테스트)
+    @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.SECONDS)
     public void pollPeers() {
         boolean discoveredNewPeer = false;
         Set<String> polledThisCycle = new HashSet<>();
