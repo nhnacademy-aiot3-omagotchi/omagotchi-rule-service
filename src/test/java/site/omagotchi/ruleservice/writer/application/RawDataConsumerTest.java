@@ -72,6 +72,7 @@ class RawDataConsumerTest {
 
         verify(writeApi).writePoint(eq(BUCKET), eq(ORG), any(Point.class));
         assertEquals(1.0, registry.get("influx.raw.consumed").counter().count());
+        assertEquals(1.0, registry.get("raw.consumer.delivery.attempts").counter().count());
     }
 
     @Test
@@ -85,6 +86,7 @@ class RawDataConsumerTest {
 
         assertSame(failure, thrown);
         assertEquals(0.0, registry.get("influx.raw.consumed").counter().count());
+        assertEquals(1.0, registry.get("raw.consumer.delivery.attempts").counter().count());
     }
 
     @Test

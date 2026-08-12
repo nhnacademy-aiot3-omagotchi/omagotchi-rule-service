@@ -1,6 +1,7 @@
 package site.omagotchi.ruleservice.messaging.infrastructure;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,8 +29,7 @@ class PublishRetryBufferTest {
     @Mock
     RabbitTemplate rabbitTemplate;
 
-    @Mock
-    MeterRegistry registry;
+    MeterRegistry registry = new SimpleMeterRegistry();
 
 
     @Test
