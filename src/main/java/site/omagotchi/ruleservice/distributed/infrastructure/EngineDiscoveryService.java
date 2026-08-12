@@ -3,6 +3,7 @@ package site.omagotchi.ruleservice.distributed.infrastructure;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cloud.client.DefaultServiceInstance;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Lazy;
@@ -75,10 +76,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
         return List.copyOf(this.knownEngines.values());
     }
 
-    //    @Scheduled(fixedDelay = 3, timeUnit = TimeUnit.SECONDS)
     @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.SECONDS) // 폴링 간격 3초 -> 1초 (테스트)
     public void pollPeers() {
         boolean discoveredNewPeer = false;
+        Set<String> polledThisCycle = new HashSet<>();
 
         try {
             for (ServiceInstance instance : this.discoveryClient.getInstances(this.applicationName)) {
@@ -94,9 +95,31 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 }
 
                 this.pollOne(peerEngineId, instance);
+                polledThisCycle.add(peerEngineId);
             }
         } catch (Exception e) {
             log.warn("Eureka 피어 목록 조회 실패 - 이번 주기는 건너뜁니다", e);
+        }
+
+        // Eureka가 이번 주기에 못 돌려준(예: discovery-service 재배포로 registry가 잠깐 비는 상황) 피어도 이미 알고 있는 주소로 직접 폴링을 이어감
+        // Eureka 장애 자체가 승격 트리거가 되지 않도록
+        for(Map.Entry<String, EngineInfo> entry : this.knownEngines.entrySet()) {
+            String peerEngineId = entry.getKey();
+
+            if(polledThisCycle.contains(peerEngineId)) {
+                continue;
+            }
+
+            EngineInfo known = entry.getValue();
+            ServiceInstance fallbackInstance = new DefaultServiceInstance(
+                    peerEngineId,
+                    this.applicationName,
+                    known.host(),
+                    known.port(),
+                    false
+            );
+
+            this.pollOne(peerEngineId, fallbackInstance);
         }
 
         boolean statusChanged = this.judgePresence();
@@ -117,27 +140,41 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
             PresenceStatus previousStatus = this.resolvePreviousStatus(peerEngineId);
 
+            // AUTH_FAILED였다가 성공했으면 즉시 ONLINE으로 - 이후 타임아웃 판정은 judgePresence()가 이어받음
+            PresenceStatus statusToCarry = previousStatus == PresenceStatus.AUTH_FAILED
+                    ? PresenceStatus.ONLINE
+                    : previousStatus;
+
             this.knownEngines.put(peerEngineId, new EngineInfo(
                     response.engineId(),
                     instance.getHost(),
                     instance.getPort(),
                     response.priority(),
                     response.startedAt(),
-                    previousStatus, // presenceStatus 판정·로깅은 judgePresence()가 전달,
+                    statusToCarry,
                     response.engineRole() // 폴링 성공 시엔 피어가 방금 보고한 engineRole 그대로 반영
             ));
 
             this.lastPolledSuccessAt.put(peerEngineId, this.clock.millis());
 
         } catch (HttpClientErrorException.Forbidden e) {
-            // 네트웍은 살아있는데 인증에서 거부됨 - 대부분 INTERNAL_SHARED_SECRET 불일치
-            // 방치하면 실제 네트웍 장애와 똑같이 '폴링 실패'로만 보여서 원인 특정 어려움
-
+            // 상대가 살아서 응답은 했지만 인증을 거부함 - "죽었다"는 증거가 아니라 설정 오류일 가능성이 높음
+            // 타임아웃 기반 OFFLINE 판정 경로를 안 타고, 즉시 AUTH_FAILED로 확정
             if (this.authFailureWarned.add(peerEngineId)) { // 이 피어에 대해 처음 경고하는 거면 true일 것임
                 log.warn("[{}] 폴링 인증 실패 (host = {}, port = {}) - INTERNAL_SHARED_SECRET이 양쪽 엔진에 동일하게 설정됐는지 확인하세요", peerEngineId, instance.getHost(), instance.getPort());
             }
 
-            this.markFailure(peerEngineId, instance);
+            this.knownEngines.put(peerEngineId, new EngineInfo(
+                    peerEngineId,
+                    instance.getHost(),
+                    instance.getPort(),
+                    parsePriority(instance.getMetadata().get("engine-priority")),
+                    0L,
+                    PresenceStatus.AUTH_FAILED,
+                    null
+            ));
+
+            // lastPolledSuccessAt은 일부러 안 건드림 - judgePresence()가 AUTH_FAILED는 타임아웃 판정에서 제외하므로 무의미
         } catch (Exception e) {
             log.debug("[{}] 폴링 실패 (host = {}, port = {})", peerEngineId, instance.getHost(), instance.getPort(), e);
             this.markFailure(peerEngineId, instance);
@@ -172,18 +209,20 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
         for (Map.Entry<String, Long> entry : this.lastPolledSuccessAt.entrySet()) {
             String peerEngineId = entry.getKey();
+            EngineInfo current = this.knownEngines.get(peerEngineId);
+
+            if (Objects.isNull(current) || current.presenceStatus() == PresenceStatus.AUTH_FAILED) {
+                continue; // AUTH_FAILED는 인증 성공(pollOne 성공 분기)으로만 벗어남 - 타임아웃으로 함부로 안 바꿈
+            }
+
             boolean online = (now - entry.getValue()) < OFFLINE_THRESHOLD_MS;
             PresenceStatus judged = online
                     ? PresenceStatus.ONLINE
                     : PresenceStatus.OFFLINE;
 
-            EngineInfo current = this.knownEngines.get(peerEngineId);
-
-            // current가 널이 아니고, 판정이 달라졌으면 갱신
-            if (Objects.nonNull(current) && current.presenceStatus() != judged) {
+            if (current.presenceStatus() != judged) {
                 if (judged == PresenceStatus.OFFLINE) {
-                    log.warn("[{}] presenceStatus 변경: {} -> OFFLINE 판정 (마지막 성공: {}ms 전)",
-                            peerEngineId, current.presenceStatus(), now - entry.getValue());
+                    log.warn("[{}] presenceStatus 변경: {} -> OFFLINE 판정 (마지막 성공: {}ms 전)", peerEngineId, current.presenceStatus(), now - entry.getValue());
                 } else {
                     log.info("[{}] presenceStatus 변경: {} -> ONLINE 복귀", peerEngineId, current.presenceStatus());
                 }
