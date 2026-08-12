@@ -94,6 +94,46 @@ class TopologyServiceTest {
         assertThat(response.reason()).contains("engine-c").doesNotContain("engine-b");
     }
 
+    @Test
+    @DisplayName("피어가 AUTH_FAILED면 DEGRADED + 사유에 인증 실패 메시지가 포함된다")
+    void degradedWhenPeerAuthFailed() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", PresenceStatus.AUTH_FAILED)
+        ));
+
+        FlowTopologyResponse response = this.topologyService.getTopology("flow-1");
+
+        assertThat(response.topologyHealth()).isEqualTo(TopologyHealth.DEGRADED);
+        assertThat(response.reason()).contains("engine-b").contains("인증 실패");
+    }
+
+    @Test
+    @DisplayName("OFFLINE 피어와 AUTH_FAILED 피어가 섞여 있으면 사유에 둘 다 포함된다")
+    void degradedReasonCombinesOfflineAndAuthFailedPeers() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", PresenceStatus.OFFLINE),
+                peer("engine-c", PresenceStatus.AUTH_FAILED)
+        ));
+
+        FlowTopologyResponse response = this.topologyService.getTopology("flow-1");
+
+        assertThat(response.topologyHealth()).isEqualTo(TopologyHealth.DEGRADED);
+        assertThat(response.reason()).contains("engine-b").contains("engine-c").contains("인증 실패");
+    }
+
+    @Test
+    @DisplayName("피어가 전부 ONLINE이면 AUTH_FAILED 이력이 없으므로 HEALTHY로 판정한다")
+    void healthyWhenNoOfflineOrAuthFailedPeers() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", PresenceStatus.ONLINE),
+                peer("engine-c", PresenceStatus.ONLINE)
+        ));
+
+        FlowTopologyResponse response = this.topologyService.getTopology("flow-1");
+
+        assertThat(response.topologyHealth()).isEqualTo(TopologyHealth.HEALTHY);
+    }
+
     private static EngineInfo peer(String engineId, PresenceStatus presenceStatus) {
         return new EngineInfo(
                 engineId,
