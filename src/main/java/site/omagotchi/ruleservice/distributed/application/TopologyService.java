@@ -32,12 +32,17 @@ public class TopologyService {
         // 존재하지 않는 flowId면 BusinessException을 던짐(FlowErrorCode.FLOW_NOT_FOUND(404))
         this.flowManager.getStatus(flowId);
 
-        List<EngineInfo> offlinePeers = this.engineDirectoryPort.listEngines().stream() // 엔진 피어들을 전부 뽑아서
+        List<EngineInfo> peers = this.engineDirectoryPort.listEngines();
+
+        List<EngineInfo> offlinePeers = peers.stream() // 엔진 피어들을 전부 뽑아서
                 .filter(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.OFFLINE) // 피어의 PresenceStatus가 OFFLINE인 것만 걸러냄
                 .toList();
 
-        // OFFLINE인 피어가 한 개도 없으면 -> HEALTHY(전원 생존)
-        if (offlinePeers.isEmpty()) {
+        List<EngineInfo> authFailedPeers = peers.stream()
+                .filter(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.AUTH_FAILED)
+                .toList();
+
+        if (offlinePeers.isEmpty() && authFailedPeers.isEmpty()) {
             return new FlowTopologyResponse(
                     flowId,
                     TopologyHealth.HEALTHY,
@@ -45,14 +50,32 @@ public class TopologyService {
             );
         }
 
-        String offlineEngineIds = offlinePeers.stream() // OFFLINE인 피어들에 스트림 걸어서
-                .map(EngineInfo::engineId) // 각 피어들의 엔진 아이디들만 뽑아서
-                .collect(Collectors.joining(", ")); // "아이디1, 아이디2, 아이디3, ..." 이런 식으로 뽑음
+        StringBuilder message = new StringBuilder();
+
+        if (!offlinePeers.isEmpty()) {
+            message.append("%s OFFLINE - 단독 운전 중".formatted(
+                    offlinePeers.stream()
+                            .map(EngineInfo::engineId)
+                            .collect(Collectors.joining(", "))
+            ));
+        }
+
+        if (!authFailedPeers.isEmpty()) {
+            if (!message.isEmpty()) {
+                message.append(" / ");
+            }
+
+            message.append("%s 인증 실패 - INTERNAL_SHARED_SECRET 설정 확인 필요".formatted(
+                    authFailedPeers.stream()
+                            .map(EngineInfo::engineId)
+                            .collect(Collectors.joining(", "))
+            ));
+        }
 
         return new FlowTopologyResponse(
                 flowId,
                 TopologyHealth.DEGRADED,
-                "%s OFFLINE - 단독 운전 중".formatted(offlineEngineIds)
+                message.toString()
         );
     }
 }
