@@ -159,13 +159,29 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         int myPriority = this.engineProperties.priority();
         String myId = this.engineProperties.id();
 
-        boolean higherPriorityOnline = this.engineDirectoryPort.listEngines().stream()
-                .filter(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE)
-                .anyMatch(engineInfo -> isHigherPriority(engineInfo, myPriority, myId));
+        List<EngineInfo> higherPriorityPeers = this.engineDirectoryPort.listEngines().stream()
+                .filter(engineInfo -> isHigherPriority(engineInfo, myPriority, myId))
+                .toList();
 
-        return higherPriorityOnline
-                ? EngineRole.STANDBY
-                : EngineRole.ACTIVE;
+        boolean higherPriorityOnline = higherPriorityPeers.stream()
+                .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE);
+
+        if (higherPriorityOnline) {
+            return EngineRole.STANDBY;
+        }
+
+        boolean higherPriorityAuthFailed = higherPriorityPeers.stream()
+                .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.AUTH_FAILED);
+
+        if (higherPriorityAuthFailed) {
+            // 상위 우선순위 피어가 응답은 하지만 인증에서 거부됨 - 죽었다는 증거가 아니므로 승격하지 않음
+            // 이미 역할이 있으면 그대로 유지, 최초 판정이면 안전하게 STANDBY
+            log.warn("[EngineRoleService] 상위 우선순위 피어가 AUTH_FAILED 상태 - 승격 보류 (INTERNAL_SHARED_SECRET 설정 확인 필요, 현재 역할 유지: {})", this.currentRole);
+
+            return Objects.requireNonNullElse(this.currentRole, EngineRole.STANDBY);
+        }
+
+        return EngineRole.ACTIVE;
     }
 
     private boolean isHigherPriority(EngineInfo otherEngineInfo, int myPriority, String myId) {
