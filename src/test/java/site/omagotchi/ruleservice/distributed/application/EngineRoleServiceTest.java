@@ -260,6 +260,45 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 전환 안 됨
     }
 
+    @Test
+    @DisplayName("최초 판정 때 상위 우선순위 피어가 AUTH_FAILED면 승격하지 않고 안전하게 STANDBY로 판정한다")
+    void higherPriorityAuthFailedThenEvaluateStandbyOnInitialAssignment() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.AUTH_FAILED) // priority 0 -> 나(1)보다 높은 우선순위인데 인증 실패 상태
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.activatable, never()).activate();
+    }
+
+    @Test
+    @DisplayName("이미 STANDBY인 상태에서 상위 피어가 AUTH_FAILED로 바뀌어도 승격을 시도하지 않고 STANDBY를 유지한다")
+    void higherPriorityAuthFailedDoesNotTriggerPromotionWhenAlreadyStandby() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE)
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - 스탠바이
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        // 상위 피어의 시크릿이 어긋나서 AUTH_FAILED로 전환 (예: 시크릿 로테이션 중 한쪽만 갱신)
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.AUTH_FAILED)
+        ));
+        engineRoleService.reevaluate();
+
+        // OFFLINE이었다면 여기서 grace 스케줄이 걸렸어야 하는데, AUTH_FAILED는 승격 후보로도 안 잡힘
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.activatable, never()).activate();
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */
