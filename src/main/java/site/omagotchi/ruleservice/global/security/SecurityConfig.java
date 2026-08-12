@@ -39,7 +39,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/health/**",
-                                "/actuator/info"
+                                "/actuator/info",
+                                "/actuator/metrics/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/v1/internal/**" // flows/**, engines/self 전부 포함

@@ -15,10 +15,8 @@ public class RestClientConfig {
      * (예: RuleSyncClient의 룰 동기화)
      */
     @Bean
-    public RestClient restClient(@Value("${core.base-url}") String baseUrl) {
-        return RestClient.builder()
-                .baseUrl(baseUrl)
-                .build();
+    public RestClient restClient(CoreClientProperties properties) {
+        return RestClient.builder().baseUrl(properties.baseUrl()).build();
     }
 
     /**
