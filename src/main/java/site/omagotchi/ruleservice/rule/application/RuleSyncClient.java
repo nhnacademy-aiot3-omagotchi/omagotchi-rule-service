@@ -142,6 +142,10 @@ public class RuleSyncClient {
                 .body(new ParameterizedTypeReference<List<RuleResponse>>() {
                 });
 
+        if(Objects.isNull(responses)){ //본문이 비어있는경우를 대비 (룰 설정이 안되어있다는게 아닌 걍 본문을 못받음)
+            throw new IllegalStateException("룰 본문이 null입니다.");
+        }
+
         List<ThresholdRule> rules = new ArrayList<>();
         for (RuleResponse response : responses) {
             try {
