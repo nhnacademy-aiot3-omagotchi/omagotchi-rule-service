@@ -1,5 +1,8 @@
 package site.omagotchi.ruleservice.messaging.infrastructure;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -35,17 +38,25 @@ public class PublishRetryBuffer implements SmartLifecycle {
     private Thread worker;
 
     private final RabbitTemplate rabbitTemplate;
+    private final Counter publishConfirmed;    // 브로커가 확정으로 받은 건수
+    private final Counter publishNacked;       // 브로커가 거부한 건수
 
 
     @Autowired
-    public PublishRetryBuffer(RabbitTemplate rabbitTemplate){
-        this(rabbitTemplate, DEFAULT_CAPACITY);
+    public PublishRetryBuffer(RabbitTemplate rabbitTemplate, MeterRegistry registry){
+        this(rabbitTemplate, DEFAULT_CAPACITY, registry);
     }
 
     /** 테스트/튜닝용 - 버퍼 상한을 지정하여 생성 */
     public PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity){
+        this(rabbitTemplate, capacity, new SimpleMeterRegistry());
+    }
+
+    private PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity, MeterRegistry registry){
         this.rabbitTemplate = rabbitTemplate;
         this.capacity = capacity;
+        this.publishConfirmed = registry.counter("rabbitmq.publish.confirmed");
+        this.publishNacked = registry.counter("rabbitmq.publish.nacked");
     }
 
     /**
@@ -139,8 +150,10 @@ public class PublishRetryBuffer implements SmartLifecycle {
         rabbitTemplate.setConfirmCallback(
                 (correlation, ack, cause) -> {
                     if (ack) {
+                        publishConfirmed.increment();
                         return; // 브로커 정상 수신
                     }
+                    publishNacked.increment();
                     if (correlation instanceof PendingCorrelationData pcd) {
                         log.warn("발행 nack → 버퍼 재적재. key={}, cause={}", pcd.pending().routingKey(), cause);
                         offer(pcd.pending());

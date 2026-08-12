@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.messaging.infrastructure;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,11 +28,14 @@ class PublishRetryBufferTest {
     @Mock
     RabbitTemplate rabbitTemplate;
 
+    @Mock
+    MeterRegistry registry;
+
 
     @Test
     @DisplayName("메세지 발송시 브로커에 문제 발생 - 버퍼 적재")
     void recoveryTest1(){
-        PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate);
+        PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate, registry);
         RabbitPublisherNode node = new RabbitPublisherNode("pub-raw", rabbitTemplate, RabbitTopologyConfig.EXCHANGE_MAIN, PublishMode.RAW, buffer);
 
         doThrow(new RuntimeException("브로커 문제 발생"))
@@ -53,7 +57,7 @@ class PublishRetryBufferTest {
     @Test
     @DisplayName("메세지 발송시 브로커에 문제 발생 - 재발송")
     void recoveryTest2(){
-        PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate); // 실제 버퍼
+        PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate, registry); // 실제 버퍼
 
         buffer.offer(raw("raw.a"));
         buffer.offer(raw("raw.b"));
