@@ -192,9 +192,33 @@ class MqttSubscriberNodeStandbyTest {
 
         mosquitto.getDockerClient().restartContainerCmd(mosquitto.getContainerId()).exec();
 
+        // waitForPortOpen은 TCP 포트만 열렸는지 확인함. mosquitto가 진짜 MQTT 핸드셰이크 받을 준비가 됐는지는 확인 안 함
+        // CI 환경에서 이 틈이 벌어지면서 publisher.connect()가 Connection lost로 실패함
+        // -> 포트 확인 후에, 진짜 MQTT connect() 자체를 재시도하도록 수정하였음
         waitForPortOpen(mosquitto.getHost(), MOSQUITTO_PORT);
 
-        publisher.connect().waitForCompletion();
+        reconnectPublisherWithRetry();
+    }
+
+    /**
+     * TCP 포트가 열려도 mosquitto가 MQTT 핸드셰이크까지 완전히 준비됐다는 보장은 아니라서
+     * (특히 CI처럼 로컬보다 느린 환경) connect() 자체를 재시도해서 그 틈을 흡수
+     */
+    private void reconnectPublisherWithRetry() throws Exception {
+        long deadline = System.currentTimeMillis() + 20_000;
+        Exception lastException = null;
+
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                publisher.connect().waitForCompletion();
+                return;
+            } catch (Exception e) {
+                lastException = e;
+                Thread.sleep(500);
+            }
+        }
+
+        throw new IllegalStateException("브로커 재시작 후 publisher 재연결 실패", lastException);
     }
 
     private void waitForPortOpen(String host, int port) throws InterruptedException {
