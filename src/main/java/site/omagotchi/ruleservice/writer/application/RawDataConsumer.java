@@ -23,6 +23,7 @@ public class RawDataConsumer {
     private final String orgId;
     private final String bucket;
 
+    private final Counter deliveryAttempts;   // Rabbit에서 넘겨받은 시점
     private final Counter consumed;
 
     public RawDataConsumer(InfluxDBClient client, InfluxDbProperties properties, MeterRegistry registry, RawFailureTracker tracker){
@@ -30,11 +31,14 @@ public class RawDataConsumer {
         this.tracker = tracker;
         this.orgId = properties.org();
         this.bucket = properties.buckets().raw();
+        this.deliveryAttempts = registry.counter("raw.consumer.delivery.attempts");
         this.consumed = registry.counter("influx.raw.consumed");
     }
 
     @RabbitListener(queues = RabbitTopologyConfig.QUEUE_RAW)
     public void consume(SensorReading reading){
+        deliveryAttempts.increment();
+
         if(reading.traceId() != null){
             MDC.put("traceId", reading.traceId());
         }
