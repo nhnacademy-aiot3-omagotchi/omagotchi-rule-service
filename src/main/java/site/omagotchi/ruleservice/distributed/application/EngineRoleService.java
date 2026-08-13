@@ -35,6 +35,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
 
     private static final long INITIAL_WAIT_MS = 15_000L;
     private static final long GRACE_MS = 1_500L;
+    private static final long ACTIVATION_RETRY_DELAY_MS = 3_000L; // 실패 시 한 번 재시도 할 때 사용
     private static final int FAILBACK_CONFIRMATIONS = 2;
     private static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;
 
@@ -208,6 +209,28 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     }
 
     private void applyRole(EngineRole role) {
-        this.flowManager.applyActivationState(role == EngineRole.ACTIVE);
+        boolean allSucceeded = this.flowManager.applyActivationState(role == EngineRole.ACTIVE);
+
+        if (!allSucceeded) {
+            log.warn("[EngineRoleService] 일부 노드의 활성화 상태 전환 실패 - {}ms 후 재시도 (role = {})", ACTIVATION_RETRY_DELAY_MS, role);
+            this.taskScheduler.schedule(
+                    () -> this.retryApplyRole(role), Instant.now(this.clock).plusMillis(ACTIVATION_RETRY_DELAY_MS)
+            );
+        }
+    }
+
+    // 실패한 노드 재시도
+    private synchronized void retryApplyRole(EngineRole role) {
+
+        // 예약된 시점에 역할이 이미 또 바뀌었으면(다른 전환이 처리됐으면) 낡은 재시도이므로 건너뜀
+        if (this.currentRole != role) {
+            return;
+        }
+
+        boolean allSucceeded = this.flowManager.applyActivationState(role == EngineRole.ACTIVE);
+
+        if (!allSucceeded) {
+            log.error("[EngineRoleService] 재시도에도 일부 노드 활성화 상태 전환 실패 - 다음 역할 전까지 수동 확인 필요 (role = {})", role);
+        }
     }
 }

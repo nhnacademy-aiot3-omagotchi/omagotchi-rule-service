@@ -35,6 +35,9 @@ class EngineRoleServiceTest {
         this.flowManager = mock(FlowManager.class);
         this.taskScheduler = mock(TaskScheduler.class);
         this.clock = new MutableClock(Instant.now());
+
+        // 기본값: 활성화 항상 성공 - 재시도 자체를 테스트하는 케이스만 개별적으로 false로 덮어쓰기
+        lenient().when(this.flowManager.applyActivationState(anyBoolean())).thenReturn(true);
     }
 
     private EngineRoleService newService() {
@@ -317,6 +320,65 @@ class EngineRoleServiceTest {
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
         verify(this.flowManager).applyActivationState(true);
+    }
+
+    @Test
+    @DisplayName("역할 적용이 일부 실패하면 일정 시간 뒤 재시도한다")
+    void retriesApplyRoleWhenActivationPartiallyFails() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+        when(this.flowManager.applyActivationState(true))
+                .thenReturn(false) // 최초 시도 - 일부 실패
+                .thenReturn(true); // 재시도 - 성공
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE, 그런데 적용 실패
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // currentRole 자체는 이미 커밋됨
+        verify(this.flowManager, times(1)).applyActivationState(true);
+
+        this.clock.advance(Duration.ofMillis(3_000L));
+        this.runLastScheduledTast(); // 예약된 재시도 실행
+
+        verify(this.flowManager, times(2)).applyActivationState(true); // 재시도로 한 번 더 호출됨
+    }
+
+    @Test
+    @DisplayName("재시도 예약 뒤 역할이 또 바뀌면, 예약됐던 재시도는 낡은 것으로 보고 건너뛴다")
+    void skipsStaleRetryWhenRoleChangedBeforeRetryFires() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE) // 상위 우선순위 피어 존재 - 최초 판정은 STANDBY
+        ));
+        when(this.flowManager.applyActivationState(false)).thenReturn(false); // STANDBY 적용 실패 -> 재시도 예약
+        when(this.flowManager.applyActivationState(true)).thenReturn(true); // 나중에 ACTIVE로 바뀔 땐 성공
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - STANDBY, 적용 실패 -> 3초 뒤 재시도 예약(1)
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        // 상위 피어가 사라짐 - failover 후보로 감지, grace(1.5초) 뒤 재확인 예약(2)
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+        engineRoleService.reevaluate();
+
+        this.clock.advance(Duration.ofMillis(1_500L));
+
+        ArgumentCaptor<Runnable> captor = ArgumentCaptor.forClass(Runnable.class);
+        verify(this.taskScheduler, atLeast(2)).schedule(captor.capture(), any(Instant.class));
+        List<Runnable> scheduled = captor.getAllValues();
+        Runnable staleStandbyRetry = scheduled.get(0); // 맨 처음 예약된 것 = STANDBY 재시도
+        Runnable confirmFailover = scheduled.get(1); // 두 번째 예약된 것 = failover 재확인
+
+        confirmFailover.run(); // 실제로 ACTIVE로 전환됨
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        staleStandbyRetry.run(); // 낡은 STANDBY 재시도가 뒤늦게 실행됨
+
+        // STANDBY로는 재적용 안 됐어야 함 (최초 1번만 호출된 채로 유지)
+        verify(this.flowManager, times(1)).applyActivationState(false);
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 여전히 ACTIVE 유지
     }
 
     /**

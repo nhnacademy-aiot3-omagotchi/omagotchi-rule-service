@@ -564,14 +564,15 @@ class FlowManagerTest {
             flowManager.deploy(flowDef1);
             flowManager.deploy(flowDef2);
 
-            flowManager.applyActivationState(true);
+            boolean allSucceeded = flowManager.applyActivationState(true);
 
+            assertThat(allSucceeded).isTrue();
             assertThat(node1.isActivated()).isTrue();
             assertThat(node2.isActivated()).isTrue();
         }
 
         @Test
-        @DisplayName("한 노드가 activate()에서 예외를 던져도, 나머지 노드는 계속 활성화된다")
+        @DisplayName("한 노드가 activate()에서 예외를 던져도, 나머지 노드는 계속 활성화되고 리턴값은 false다")
         void applyActivationStateIsolatesNodeFailures() {
             FlowDefinition flowDef1 = singleNodeFlowDef("flow-1", "nodeA");
             FlowDefinition flowDef2 = singleNodeFlowDef("flow-2", "nodeB");
@@ -586,8 +587,9 @@ class FlowManagerTest {
             flowManager.deploy(flowDef1);
             flowManager.deploy(flowDef2);
 
-            assertThatCode(() -> flowManager.applyActivationState(true)).doesNotThrowAnyException();
+            boolean allSucceeded = flowManager.applyActivationState(true);
 
+            assertThat(allSucceeded).isFalse();
             assertThat(healthyNode.isActivated()).isTrue();
         }
     }

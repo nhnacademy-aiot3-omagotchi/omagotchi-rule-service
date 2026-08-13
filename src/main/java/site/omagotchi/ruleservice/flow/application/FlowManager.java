@@ -299,8 +299,12 @@ public class FlowManager {
      * 배포된 모든 플로우의 Activatable 노드를 주어진 활성화 상태로 맞춤
      * EngineRoleService(역할 판정), SingleEngineMode(단일 엔진 모드)가 역할 전환 시 호출하는 진입점
      * 노드 하나가 실패해도 나머지 노드는 계속 처리(격리) - 역할 전환은 이미 결정된 뒤라 부분 실패로 전체를 막으면 안 됨
+     *
+     * @return 노드 전부 성공적으로 전환됐으면 true, 하나라도 실패했으면 false
      */
-    public void applyActivationState(boolean shouldBeActive) {
+    public boolean applyActivationState(boolean shouldBeActive) {
+        boolean allSucceeded = true;
+
         for (Activatable activatable : this.getActivatableNodes()) {
             try {
                 if (shouldBeActive) {
@@ -310,8 +314,11 @@ public class FlowManager {
                 }
             } catch (RuntimeException e) {
                 log.error("[FlowManager] 노드 활성화 상태 전환 실패 - 이 노드만 건너뛰고 계속 진행 (shouldBeActive = {})", shouldBeActive, e);
+                allSucceeded = false;
             }
         }
+
+        return allSucceeded;
     }
 
     // FlowManager 차원의 존재 확인
