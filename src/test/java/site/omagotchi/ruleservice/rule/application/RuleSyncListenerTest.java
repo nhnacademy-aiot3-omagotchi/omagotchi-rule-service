@@ -67,7 +67,7 @@ class RuleSyncListenerTest {
         rabbitTemplate.convertAndSend(
                 RuleSyncListener.EXCHANGE_RULE_CHANGED,
                 "",
-                new RuleResponse(1L, "eui-1", "co2", "말도 안되는 비교연산자", 1000.0, 1L)
+                new RuleResponse(1L, "eui-2", "humidity", "말도 안되는 비교연산자", 1500.0, 1L)
         );
 
         long deadline = System.currentTimeMillis() + 5000;
@@ -75,7 +75,9 @@ class RuleSyncListenerTest {
             Thread.sleep(100);
         }
         assertEquals(before + 1, meterRegistry.get("rule.sync.rejected").counter().count());
-        assertTrue(inMemoryRuleCache.evaluate("eui-2", "humidity", 1500).isEmpty());  // 이 룰은 미반영
 
+        // evaluate()는 룰이 없을 때와 임계값 미달일 때를 구분하지 못하므로 캐시 등록 여부를 직접 확인
+        assertTrue(inMemoryRuleCache.getAll().stream()
+                .noneMatch(rule -> rule.deviceEui().equals("eui-2") && rule.metric().equals("humidity")));
     }
 }
