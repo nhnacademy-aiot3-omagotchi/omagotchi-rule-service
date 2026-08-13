@@ -14,7 +14,7 @@ import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 @Slf4j
 @Component
 public class RuleSyncListener {
-    public static final String RULE_UPDATED_EXCHANGE = "omagotchi.rule.updated.exchange";
+    public static final String EXCHANGE_RULE_CHANGED = "omagotchi.rule.changed.exchange";
 
     private final InMemoryRuleCache inMemoryRuleCache;
     private final Counter rejectCounter;
@@ -26,7 +26,7 @@ public class RuleSyncListener {
 
     @RabbitListener(bindings = @QueueBinding(
             value = @Queue,
-            exchange = @Exchange(value = RULE_UPDATED_EXCHANGE, type = "fanout")
+            exchange = @Exchange(value = EXCHANGE_RULE_CHANGED, type = "fanout")
     ))
     public void onRuleUpdated(RuleResponse ruleResponse){
         ThresholdRule rule;

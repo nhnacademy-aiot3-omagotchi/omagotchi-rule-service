@@ -65,7 +65,7 @@ class ThresholdRuleNodeTest {
     @Test
     @DisplayName("룰에 적중하면 표시를 달고 통과하며 RULE_HIT 이벤트를 발행한다")
     void ruleHitMarksAndReportsTest(){
-        ThresholdRule rule = new ThresholdRule(1L,"eui-1","co2", Operator.GT,1000.0,1L,0L);
+        ThresholdRule rule = new ThresholdRule(1L,"eui-1","co2", Operator.GT,1000.0,1L);
 
         when(ruleCache.evaluate("eui-1","co2",1500.0)).thenReturn(Optional.of(rule));
 

@@ -9,10 +9,8 @@ public record ThresholdRule(
         String metric,
         Operator operator,
         double threshold,
-        long ruleVersion,
-        long updatedAt
+        long ruleVersion
 ) {
-
     public ThresholdRule {
 
         if (Objects.isNull(deviceEui) || deviceEui.isBlank()) {
@@ -33,16 +31,17 @@ public record ThresholdRule(
 
     }
 
-    /** 룰 버전을 비교하여 최신인지를 확인*/
+    /**
+     * 룰 버전을 비교하여 최신인지를 확인
+     */
     public boolean isNewerThan(ThresholdRule other) {
         return other == null || this.ruleVersion > other.ruleVersion;
     }
 
-
-    /** 임계값과 비교연산자를 통해서 자동으로 연산*/
+    /**
+     * 임계값과 비교연산자를 통해서 자동으로 연산
+     */
     public boolean ruleHit(double value) {
         return operator.matches(value, threshold);
     }
-
-
 }
