@@ -47,7 +47,7 @@ class RuleSyncClientTest {
     void initialTest() throws InterruptedException{
 
         //현재 learning Service에 룰엔진 관련 코드가 없음. 다음과 같이 가짜 요청/응답으로 테스트 진행
-        restServiceServer.expect(requestTo("/api/v1/rules"))
+        restServiceServer.expect(requestTo("/api/v1/threshold-rules"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(V1, MediaType.APPLICATION_JSON));
 
@@ -66,11 +66,11 @@ class RuleSyncClientTest {
     @Test
     @DisplayName("재동기화 보정 테스트 - 들어와야하게 안들어오다가 재동기때 들어온경우 카운터 증가")
     void reSyncTest() throws InterruptedException{
-        restServiceServer.expect(requestTo("/api/v1/rules"))
+        restServiceServer.expect(requestTo("/api/v1/threshold-rules"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(V1, MediaType.APPLICATION_JSON));
 
-        restServiceServer.expect(requestTo("/api/v1/rules"))
+        restServiceServer.expect(requestTo("/api/v1/threshold-rules"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(V2, MediaType.APPLICATION_JSON));
 
