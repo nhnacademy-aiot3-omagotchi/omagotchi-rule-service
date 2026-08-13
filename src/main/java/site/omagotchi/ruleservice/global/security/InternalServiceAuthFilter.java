@@ -16,6 +16,7 @@ import site.omagotchi.ruleservice.global.exception.ApiErrorResponse;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Objects;
 
 @Component
@@ -38,13 +39,25 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String token = request.getHeader(INTERNAL_TOKEN_HEADER);
 
-        if (!Objects.equals(token, this.internalAuthProperties.sharedSecret())) {
+        if (!this.matchesSharedSecret(token)) {
             this.reject(request, response);
 
             return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    // 타이밍 공격 방지 - String.equals()는 첫 불일치 문자에서 바로 반환해 비교 시간이 세어나갈 수 있어 상수 시간 비교 사용
+    private boolean matchesSharedSecret(String rawToken) {
+        if (Objects.isNull(rawToken)) {
+            return false;
+        }
+
+        return MessageDigest.isEqual(
+                rawToken.getBytes(StandardCharsets.UTF_8),
+                this.internalAuthProperties.sharedSecret().getBytes(StandardCharsets.UTF_8)
+        );
     }
 
     private void reject(HttpServletRequest request, HttpServletResponse response) throws IOException {
