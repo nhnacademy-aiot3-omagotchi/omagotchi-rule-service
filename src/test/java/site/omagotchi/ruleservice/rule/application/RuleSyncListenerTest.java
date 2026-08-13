@@ -46,7 +46,7 @@ class RuleSyncListenerTest {
     @DisplayName("정상 룰 수신 - 캐싱 작업")
     void ruleUpdatedSuccessTest() throws InterruptedException {
         rabbitTemplate.convertAndSend(
-                RuleSyncListener.RULE_UPDATED_EXCHANGE,
+                RuleSyncListener.EXCHANGE_RULE_CHANGED,
                 "",
                 new RuleResponse(1L, "eui-1", "co2", "GT", 1000.0, 1L)
         );
@@ -65,7 +65,7 @@ class RuleSyncListenerTest {
     void ruleUpdatedFailTest() throws InterruptedException {
         double before = meterRegistry.get("rule.sync.rejected").counter().count();
         rabbitTemplate.convertAndSend(
-                RuleSyncListener.RULE_UPDATED_EXCHANGE,
+                RuleSyncListener.EXCHANGE_RULE_CHANGED,
                 "",
                 new RuleResponse(1L, "eui-1", "co2", "말도 안되는 비교연산자", 1000.0, 1L)
         );
