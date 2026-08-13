@@ -8,6 +8,8 @@ import site.omagotchi.ruleservice.distributed.application.port.EngineAddressReso
 import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 
+import java.time.Clock;
+
 /**
  * 이 엔진 자신의 EngineInfo를 기동 시점에 한 번만 계산해서 보관
  * presentation(GET /self)과 향후 GET /engines의 SELF 항목이 같은 값을 공유하기 위함
@@ -26,14 +28,15 @@ public class EngineIdentityResolver {
 
     public EngineIdentityResolver(EngineProperties engineProperties,
                                   EngineAddressResolverPort engineAddressResolverPort,
-                                  @Value("${server.port}") int port) {
+                                  @Value("${server.port}") int port,
+                                  Clock clock) {
 
         this.self = new EngineInfo(
                 engineProperties.id(), // engineId
                 engineAddressResolverPort.resolveHost(), // host
                 port,
                 engineProperties.priority(), // priority
-                System.currentTimeMillis(), // startedAt
+                clock.millis(), // startedAt
                 PresenceStatus.SELF, // presenceStatus
                 null // engineRole - 기동 시점엔 아직 판정 전이라 항상 null, 응답 조립 시 EngineRoleService.getCurrentRole()로 덮어씀
         );
