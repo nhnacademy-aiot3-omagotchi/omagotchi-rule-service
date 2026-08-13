@@ -299,6 +299,36 @@ class EngineRoleServiceTest {
         verify(this.activatable, never()).activate();
     }
 
+    @Test
+    @DisplayName("최초 판정 때 낮은 우선순위 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작한다")
+    void initialAssignmentStartsAsStandbyWhenLowerPriorityPeerAlreadyActive() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", 2, PresenceStatus.ONLINE, EngineRole.ACTIVE) // priority 2 -> 나(1)보다 낮지만 이미 액티브
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.activatable, never()).activate();
+    }
+
+    @Test
+    @DisplayName("피어가 ACTIVE를 보고했어도 OFFLINE이면(죽은 뒤 남은 옛 role 값) 무시하고 ACTIVE로 판정한다")
+    void initialAssignmentBecomesActiveWhenReportedActivePeerIsOffline() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", 2, PresenceStatus.OFFLINE, EngineRole.ACTIVE) // 죽기 전엔 ACTIVE였지만 지금은 OFFLINE
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(this.activatable, times(1)).activate();
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */
@@ -312,6 +342,10 @@ class EngineRoleServiceTest {
     }
 
     private static EngineInfo peer(String engineId, int priority, PresenceStatus presenceStatus) {
+        return peer(engineId, priority, presenceStatus, null);
+    }
+
+    private static EngineInfo peer(String engineId, int priority, PresenceStatus presenceStatus, EngineRole engineRole) {
         return new EngineInfo(
                 engineId,
                 "localhost",
@@ -319,6 +353,7 @@ class EngineRoleServiceTest {
                 priority,
                 0L,
                 presenceStatus,
-                null);
+                engineRole
+        );
     }
 }

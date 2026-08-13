@@ -20,6 +20,7 @@ import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.distributed.application.MutableClock;
 import site.omagotchi.ruleservice.distributed.application.port.EnginePresenceListener;
 import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
+import site.omagotchi.ruleservice.distributed.domain.EngineRole;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 
 import java.time.Duration;
@@ -256,5 +257,32 @@ class EngineDiscoveryServiceTest {
         this.engineDiscoveryService.pollPeers(); // 2주기 - Eureka는 빈 목록이지만 폴백 폴링으로 여전히 성공
 
         assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.ONLINE);
+    }
+
+    @Test
+    @DisplayName("presenceStatus는 그대로여도 피어의 engineRole이 바뀌면 알림이 온다")
+    void notifiesWhenPeerRoleChangesEvenIfPresenceStaysOnline() {
+        String activeResponse = """
+                {"engineId":"engine-b","host":"peer-host","port":8082,"priority":2,"startedAt":0,"engineRole":"ACTIVE"}
+                """;
+        String standbyResponse = """
+                {"engineId":"engine-b","host":"peer-host","port":8082,"priority":2,"startedAt":0,"engineRole":"STANDBY"}
+                """;
+
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(activeResponse, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(activeResponse, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(standbyResponse, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers(); // 최초 발견 - 알림 1회 (role=ACTIVE)
+        this.engineDiscoveryService.pollPeers(); // presence·role 모두 그대로 - 알림 없음
+        this.engineDiscoveryService.pollPeers(); // presence는 그대로, role만 ACTIVE -> STANDBY - 알림
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().engineRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.listener, times(2)).onPresenceChanged(); // 최초 발견 1회 + role 변화 1회 (presence 자체는 안 바뀜)
     }
 }

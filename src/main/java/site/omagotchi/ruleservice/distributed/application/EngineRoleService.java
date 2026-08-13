@@ -159,7 +159,9 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         int myPriority = this.engineProperties.priority();
         String myId = this.engineProperties.id();
 
-        List<EngineInfo> higherPriorityPeers = this.engineDirectoryPort.listEngines().stream()
+        List<EngineInfo> peers = this.engineDirectoryPort.listEngines();
+
+        List<EngineInfo> higherPriorityPeers = peers.stream()
                 .filter(engineInfo -> isHigherPriority(engineInfo, myPriority, myId))
                 .toList();
 
@@ -179,6 +181,19 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             log.warn("[EngineRoleService] 상위 우선순위 피어가 AUTH_FAILED 상태 - 승격 보류 (INTERNAL_SHARED_SECRET 설정 확인 필요, 현재 역할 유지: {})", this.currentRole);
 
             return Objects.requireNonNullElse(this.currentRole, EngineRole.STANDBY);
+        }
+
+        // 최초 판정인데 낮은 우선순위가 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작
+        // (최초 배정은 grace 없이 즉시 적용되므로, 여기서 안 막으면 상대가 강등할 때까지 이중 ACTIVE 구간이 생김)
+        // OFFLINE 피어에 남아있는 옛 engineRole 잔상에 낚이지 않도록 presenceStatus == ONLINE도 같이 확인
+        if (Objects.isNull(this.currentRole)) {
+            boolean onlinePeerAlreadyActive = peers.stream()
+                    .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE
+                            && engineInfo.engineRole() == EngineRole.ACTIVE);
+
+            if (onlinePeerAlreadyActive) {
+                return EngineRole.STANDBY;
+            }
         }
 
         return EngineRole.ACTIVE;

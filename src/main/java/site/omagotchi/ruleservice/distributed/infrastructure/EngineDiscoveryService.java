@@ -79,6 +79,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.SECONDS)
     public void pollPeers() {
         boolean discoveredNewPeer = false;
+        boolean peerRoleChanged = false;
         Set<String> polledThisCycle = new HashSet<>();
 
         try {
@@ -94,7 +95,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     discoveredNewPeer = true; // 처음 보는 피어 - 상태와 무관하게 존재 자체를 알려야 함
                 }
 
-                this.pollOne(peerEngineId, instance);
+                if (this.pollOne(peerEngineId, instance)) {
+                    peerRoleChanged = true;
+                }
+
                 polledThisCycle.add(peerEngineId);
             }
         } catch (Exception e) {
@@ -103,10 +107,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
         // Eureka가 이번 주기에 못 돌려준(예: discovery-service 재배포로 registry가 잠깐 비는 상황) 피어도 이미 알고 있는 주소로 직접 폴링을 이어감
         // Eureka 장애 자체가 승격 트리거가 되지 않도록
-        for(Map.Entry<String, EngineInfo> entry : this.knownEngines.entrySet()) {
+        for (Map.Entry<String, EngineInfo> entry : this.knownEngines.entrySet()) {
             String peerEngineId = entry.getKey();
 
-            if(polledThisCycle.contains(peerEngineId)) {
+            if (polledThisCycle.contains(peerEngineId)) {
                 continue;
             }
 
@@ -119,17 +123,19 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     false
             );
 
-            this.pollOne(peerEngineId, fallbackInstance);
+            if (this.pollOne(peerEngineId, fallbackInstance)) {
+                peerRoleChanged = true;
+            }
         }
 
         boolean statusChanged = this.judgePresence();
 
-        if (discoveredNewPeer || statusChanged) {
+        if (discoveredNewPeer || statusChanged || peerRoleChanged) {
             this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
         }
     }
 
-    private void pollOne(String peerEngineId, ServiceInstance instance) {
+    private boolean pollOne(String peerEngineId, ServiceInstance instance) {
         try {
             PeerSelfInfo response = this.engineInternalRestClient.get()
                     .uri("http://{host}:{port}/api/v1/internal/engines/self", instance.getHost(), instance.getPort())
@@ -138,7 +144,13 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
             this.authFailureWarned.remove(peerEngineId); // 복구되면 다음 실패 때 다시 경고할 수 있도록 초기화
 
-            PresenceStatus previousStatus = this.resolvePreviousStatus(peerEngineId);
+            EngineInfo existing = this.knownEngines.get(peerEngineId);
+            PresenceStatus previousStatus = Objects.nonNull(existing)
+                    ? existing.presenceStatus()
+                    : PresenceStatus.ONLINE; // 첫 발견 유예
+            EngineRole previousRole = Objects.nonNull(existing)
+                    ? existing.engineRole()
+                    : null;
 
             // AUTH_FAILED였다가 성공했으면 즉시 ONLINE으로 - 이후 타임아웃 판정은 judgePresence()가 이어받음
             PresenceStatus statusToCarry = previousStatus == PresenceStatus.AUTH_FAILED
@@ -156,6 +168,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             ));
 
             this.lastPolledSuccessAt.put(peerEngineId, this.clock.millis());
+
+            // 피어의 role 변화도 presenceStatus 전이와 동일하게 리스너에게 알려야 함
+            // (안 그러면 failback 대기 중인 엔진이 상대가 실제로 강등되는 순간을 영영 못 보고 재판정 기회를 잃음)
+            return previousRole != response.engineRole;
 
         } catch (HttpClientErrorException.Forbidden e) {
             // 상대가 살아서 응답은 했지만 인증을 거부함 - "죽었다"는 증거가 아니라 설정 오류일 가능성이 높음
@@ -175,9 +191,13 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             ));
 
             // lastPolledSuccessAt은 일부러 안 건드림 - judgePresence()가 AUTH_FAILED는 타임아웃 판정에서 제외하므로 무의미
+            return false;
+
         } catch (Exception e) {
             log.debug("[{}] 폴링 실패 (host = {}, port = {})", peerEngineId, instance.getHost(), instance.getPort(), e);
             this.markFailure(peerEngineId, instance);
+
+            return false;
         }
     }
 
@@ -193,14 +213,6 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 PresenceStatus.ONLINE, // 첫 발견 유예
                 null // 폴링 실패라 engineRole을 아직 모름
         ));
-    }
-
-    private PresenceStatus resolvePreviousStatus(String peerEngineId) {
-        EngineInfo existing = this.knownEngines.get(peerEngineId);
-
-        return Objects.nonNull(existing)
-                ? existing.presenceStatus()
-                : PresenceStatus.ONLINE; // 첫 발견 유예
     }
 
     private boolean judgePresence() {
