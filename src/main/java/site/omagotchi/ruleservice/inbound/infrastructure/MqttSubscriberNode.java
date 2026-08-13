@@ -20,6 +20,7 @@ import java.util.Map;
 public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Activatable {
 
     private final String brokerUrl;
+    @Getter
     private final String clientId;
     private final String username;
     private final String password;
@@ -151,8 +152,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
 
     /**
      * cleanStart(false)라 브로커가 이전 세션의 구독을 기억함
-     * 같은 프로세스의 재연결 뿐만 아니라, 프로세스가 통째로 재시작돼서 같은 clientId로 새로 연결하는 경우에도 브로커가 예전 구독을 그대로 복원해서 activate() 호출 없이 메시지를 밀어줄 수 있음
+     * 같은 프로세스의 재연결 뿐만 아니라, 프로세스가 통째로 재시작돼서 같은 clientId로 새로 연결하는 경우에도 브로커가 예전 구독을 그대로 복원해서 actiavte() 호출 없이 메시지를 밀어줄 수 있음
      * 그래서 연결이 완료될 때마다(최초 연결 포함) 현재 게이트 상태(activated)와 브로커 쪽 구독 상태를 항상 맞춰줌
+     * waitForCompletion()으로 여기서 기다리면 Paho 내부 콜백 스레드가 멈춰서 교착상태나 클라이언트 전체 정체로 이어질 수 있음 (Paho 공식문서 경고)
+     * -> 완료를 기다리지 않고 비동기 콜백으로만 결과를 확인함
      */
     @Override
     public synchronized void connectComplete(boolean reconnect, String serverURI) {
@@ -160,15 +163,27 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
 
         try {
             if (activated) {
-                mqttAsyncClient.subscribe(topicFilter, 1).waitForCompletion();
-                log.info("[{}] 연결 완료 후 구독 상태 확인 (topicFilter = {})", getId(), topicFilter);
+                mqttAsyncClient.subscribe(topicFilter, 1, null, syncResultListener("구독"));
             } else {
-                mqttAsyncClient.unsubscribe(topicFilter).waitForCompletion();
-                log.info("[{}] 연결 완료 후 STANDBY 상태이므로 구독 해제 확인 (topicFilter = {})", getId(), topicFilter);
+                mqttAsyncClient.unsubscribe(topicFilter, null, syncResultListener("구독 해제"));
             }
         } catch (MqttException e) {
-            log.error("[{}] 연결 후 구독 상태 동기화 실패 (topicFilter = {})", getId(), topicFilter, e);
+            log.error("[{}] 연결 후 구독 상태 동기화 요청 실패 (topicFilter = {})", getId(), topicFilter, e);
         }
+    }
+
+    private MqttActionListener syncResultListener(String action) {
+        return new MqttActionListener() {
+            @Override
+            public void onSuccess(IMqttToken asyncActionToken) {
+                log.info("[{}] 연결 완료 후 {} 상태 확인 (topicFilter = {})", getId(), action, topicFilter);
+            }
+
+            @Override
+            public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+                log.error("[{}] 연결 후 {} 동기화 실패 (topicFilter = {})", getId(), action, topicFilter, exception);
+            }
+        };
     }
 
     @Override
@@ -189,9 +204,5 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
     @Override
     public void authPacketArrived(int reasonCode, MqttProperties properties) {
 
-    }
-
-    public String getClientId() {
-        return clientId;
     }
 }

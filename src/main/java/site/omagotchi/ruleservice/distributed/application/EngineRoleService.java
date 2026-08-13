@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.distributed.application;
 
+import com.influxdb.client.domain.Run;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -212,10 +213,16 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     private void applyRole(EngineRole role) {
         List<Activatable> activatables = this.flowManager.getActivatableNodes();
 
-        if (role == EngineRole.ACTIVE) {
-            activatables.forEach(Activatable::activate);
-        } else {
-            activatables.forEach(Activatable::deactivate);
+        for (Activatable activatable : activatables) {
+            try {
+                if(role == EngineRole.ACTIVE) {
+                    activatable.activate();
+                } else {
+                    activatable.deactivate();
+                }
+            } catch (RuntimeException e) {
+                log.error("[EngineRoleService] 노드 활성화 상태 전환 실패 - 이 노드만 건너뛰고 계속 진행 (role = {})", role, e);
+            }
         }
     }
 }

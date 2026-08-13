@@ -329,6 +329,25 @@ class EngineRoleServiceTest {
         verify(this.activatable, times(1)).activate();
     }
 
+    @Test
+    @DisplayName("여러 노드 중 하나가 activate()에서 예외를 던져도, 나머지 노드는 계속 활성화된다")
+    void continuesActivatingRemainingNodesWhenOneNodeThrows() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        Activatable failingNode = mock(Activatable.class);
+        Activatable healthyNode = mock(Activatable.class);
+        doThrow(new RuntimeException("MQTT 구독 실패")).when(failingNode).activate();
+        when(this.flowManager.getActivatableNodes()).thenReturn(List.of(failingNode, healthyNode));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(failingNode).activate();
+        verify(healthyNode).activate(); // 앞 노드가 던져도 뒤 노드는 호출됨
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */
