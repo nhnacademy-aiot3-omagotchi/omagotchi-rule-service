@@ -7,14 +7,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
-import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class SingleEngineModeTest {
@@ -30,17 +28,11 @@ class SingleEngineModeTest {
     }
 
     @Test
-    @DisplayName("ApplicationReadyEvent 시점에 모든 Activatable 노드를 즉시 activate한다")
+    @DisplayName("ApplicationReadyEvent 시점에 FlowManager에 활성화 상태를 위임한다")
     void activatesAllActivatableNodesOnReady() {
-        Activatable node1 = mock(Activatable.class);
-        Activatable node2 = mock(Activatable.class);
-
-        when(this.flowManager.getActivatableNodes()).thenReturn(List.of(node1, node2));
-
         this.singleEngineMode.activateAll();
 
-        verify(node1).activate();
-        verify(node2).activate();
+        verify(this.flowManager).applyActivationState(true);
     }
 
     @Test
@@ -51,7 +43,7 @@ class SingleEngineModeTest {
 
     @Test
     @DisplayName("sync* 메서드는 전달할 파트너가 없으므로 아무 동작 없이 예외 없이 끝난다")
-    void syncMethodsAreNoPo() {
+    void syncMethodsAreNoOp() {
         assertThatCode(() -> {
             this.singleEngineMode.syncStart("flow-1");
             this.singleEngineMode.syncStop("flow-1");

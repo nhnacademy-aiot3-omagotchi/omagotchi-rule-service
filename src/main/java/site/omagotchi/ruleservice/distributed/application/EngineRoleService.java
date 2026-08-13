@@ -1,6 +1,5 @@
 package site.omagotchi.ruleservice.distributed.application;
 
-import com.influxdb.client.domain.Run;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +13,6 @@ import site.omagotchi.ruleservice.distributed.domain.EngineRole;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
-import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -36,7 +34,6 @@ import java.util.Objects;
 public class EngineRoleService implements EnginePresenceListener, EngineActivePort {
 
     private static final long INITIAL_WAIT_MS = 15_000L;
-    //    private static final long GRACE_MS = 5_000L;
     private static final long GRACE_MS = 1_500L;
     private static final int FAILBACK_CONFIRMATIONS = 2;
     private static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;
@@ -211,18 +208,6 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     }
 
     private void applyRole(EngineRole role) {
-        List<Activatable> activatables = this.flowManager.getActivatableNodes();
-
-        for (Activatable activatable : activatables) {
-            try {
-                if(role == EngineRole.ACTIVE) {
-                    activatable.activate();
-                } else {
-                    activatable.deactivate();
-                }
-            } catch (RuntimeException e) {
-                log.error("[EngineRoleService] 노드 활성화 상태 전환 실패 - 이 노드만 건너뛰고 계속 진행 (role = {})", role, e);
-            }
-        }
+        this.flowManager.applyActivationState(role == EngineRole.ACTIVE);
     }
 }

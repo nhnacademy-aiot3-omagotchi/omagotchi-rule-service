@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
-import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
 import java.util.Map;
 
@@ -36,7 +35,7 @@ public class SingleEngineMode implements EngineActivePort, PeerFlowSyncPort {
     @EventListener(ApplicationReadyEvent.class)
     public void activateAll() {
         log.info("Eureka 비활성 - 단일 엔진 모드로 모든 Activatable 노드를 즉시 활성화");
-        this.flowManager.getActivatableNodes().forEach(Activatable::activate);
+        this.flowManager.applyActivationState(true);
     }
 
     @Override

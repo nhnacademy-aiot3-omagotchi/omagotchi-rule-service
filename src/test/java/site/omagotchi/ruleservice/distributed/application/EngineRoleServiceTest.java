@@ -10,7 +10,6 @@ import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
 import site.omagotchi.ruleservice.distributed.domain.EngineRole;
 import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
-import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -29,8 +28,6 @@ class EngineRoleServiceTest {
     private TaskScheduler taskScheduler;
     private MutableClock clock;
 
-    private Activatable activatable;
-
     @BeforeEach
     void setUp() {
         this.engineDirectoryPort = mock(EngineDirectoryPort.class);
@@ -38,10 +35,6 @@ class EngineRoleServiceTest {
         this.flowManager = mock(FlowManager.class);
         this.taskScheduler = mock(TaskScheduler.class);
         this.clock = new MutableClock(Instant.now());
-
-        this.activatable = mock(Activatable.class);
-
-        when(this.flowManager.getActivatableNodes()).thenReturn(List.of(this.activatable));
     }
 
     private EngineRoleService newService() {
@@ -63,8 +56,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isNull();
-        verify(this.activatable, times(0)).activate();
-        verify(this.activatable, times(0)).deactivate();
+        verify(this.flowManager, never()).applyActivationState(anyBoolean());
     }
 
     @Test
@@ -79,8 +71,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
-        verify(this.activatable, times(1)).activate();
-        verify(this.activatable, times(0)).deactivate();
+        verify(this.flowManager).applyActivationState(true);
     }
 
     @Test
@@ -95,8 +86,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
-        verify(this.activatable, times(0)).activate();
-        verify(this.activatable, times(1)).deactivate();
+        verify(this.flowManager).applyActivationState(false);
     }
 
     @Test
@@ -125,7 +115,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate(); // 재판정 - 여전히 ACTIVE (멱등성)
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
-        verify(this.activatable, times(1)).activate(); // 두 번 호출되면 안 됨.
+        verify(this.flowManager, times(1)).applyActivationState(true); // 두 번 호출되면 안 됨.
     }
 
     @Test
@@ -174,13 +164,13 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate(); // failover 후보 - grace 예약
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY); // 아직 안 바뀜
-        verify(this.activatable, never()).activate();
+        verify(this.flowManager, never()).applyActivationState(true);
 
         this.clock.advance(Duration.ofMillis(5_000L));
         this.runLastScheduledTast(); // confirmFailover() 실행 - 재계산해도 여전히 없음
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
-        verify(this.activatable, times(1)).activate();
+        verify(this.flowManager).applyActivationState(true);
     }
 
     @Test
@@ -205,7 +195,7 @@ class EngineRoleServiceTest {
         this.runLastScheduledTast(); // confirmFailover() 재계산 시점엔 이미 복귀함 -> 스탠바이 유지
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
-        verify(this.activatable, never()).activate();
+        verify(this.flowManager, never()).applyActivationState(true);
     }
 
     @Test
@@ -225,13 +215,13 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 안 바뀜
-        verify(this.activatable, never()).deactivate();
+        verify(this.flowManager, never()).applyActivationState(false);
 
         this.clock.advance(Duration.ofMillis(5_000));
         this.runLastScheduledTast(); // 2번째 확인
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
-        verify(this.activatable, times(1)).deactivate();
+        verify(this.flowManager).applyActivationState(false);
     }
 
     @Test
@@ -272,7 +262,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
-        verify(this.activatable, never()).activate();
+        verify(this.flowManager, never()).applyActivationState(true);
     }
 
     @Test
@@ -296,14 +286,14 @@ class EngineRoleServiceTest {
 
         // OFFLINE이었다면 여기서 grace 스케줄이 걸렸어야 하는데, AUTH_FAILED는 승격 후보로도 안 잡힘
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
-        verify(this.activatable, never()).activate();
+        verify(this.flowManager, never()).applyActivationState(true);
     }
 
     @Test
     @DisplayName("최초 판정 때 낮은 우선순위 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작한다")
     void initialAssignmentStartsAsStandbyWhenLowerPriorityPeerAlreadyActive() {
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
-                peer("engine-b", 2, PresenceStatus.ONLINE, EngineRole.ACTIVE) // priority 2 -> 나(1)보다 낮지만 이미 액티브
+                peer("engine-b", 2, PresenceStatus.ONLINE, EngineRole.ACTIVE) // priority 2 -> 나(1)보다 낮지만 이미 ACTIVE
         ));
 
         EngineRoleService engineRoleService = this.newService();
@@ -311,7 +301,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
-        verify(this.activatable, never()).activate();
+        verify(this.flowManager, never()).applyActivationState(true);
     }
 
     @Test
@@ -326,26 +316,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
-        verify(this.activatable, times(1)).activate();
-    }
-
-    @Test
-    @DisplayName("여러 노드 중 하나가 activate()에서 예외를 던져도, 나머지 노드는 계속 활성화된다")
-    void continuesActivatingRemainingNodesWhenOneNodeThrows() {
-        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
-
-        Activatable failingNode = mock(Activatable.class);
-        Activatable healthyNode = mock(Activatable.class);
-        doThrow(new RuntimeException("MQTT 구독 실패")).when(failingNode).activate();
-        when(this.flowManager.getActivatableNodes()).thenReturn(List.of(failingNode, healthyNode));
-
-        EngineRoleService engineRoleService = this.newService();
-        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
-        engineRoleService.reevaluate();
-
-        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
-        verify(failingNode).activate();
-        verify(healthyNode).activate(); // 앞 노드가 던져도 뒤 노드는 호출됨
+        verify(this.flowManager).applyActivationState(true);
     }
 
     /**
@@ -372,7 +343,6 @@ class EngineRoleServiceTest {
                 priority,
                 0L,
                 presenceStatus,
-                engineRole
-        );
+                engineRole);
     }
 }

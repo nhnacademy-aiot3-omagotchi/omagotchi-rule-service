@@ -547,5 +547,48 @@ class FlowManagerTest {
 
             assertThat(activatables).containsExactly(node);
         }
+
+        @Test
+        @DisplayName("applyActivationState(true)는 배포된 모든 RUNNING 플로우의 Activatable 노드를 activate한다")
+        void applyActivationStateActivatesAllRunningNodes() {
+            FlowDefinition flowDef1 = singleNodeFlowDef("flow-1", "nodeA");
+            FlowDefinition flowDef2 = singleNodeFlowDef("flow-2", "nodeB");
+            FakeActivatableNode node1 = new FakeActivatableNode("nodeA");
+            FakeActivatableNode node2 = new FakeActivatableNode("nodeB");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node1, node2);
+            when(flowEngine.getState("flow-1")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getState("flow-2")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(node1);
+            when(flowEngine.getNode("flow-2", "nodeB")).thenReturn(node2);
+
+            flowManager.deploy(flowDef1);
+            flowManager.deploy(flowDef2);
+
+            flowManager.applyActivationState(true);
+
+            assertThat(node1.isActivated()).isTrue();
+            assertThat(node2.isActivated()).isTrue();
+        }
+
+        @Test
+        @DisplayName("한 노드가 activate()에서 예외를 던져도, 나머지 노드는 계속 활성화된다")
+        void applyActivationStateIsolatesNodeFailures() {
+            FlowDefinition flowDef1 = singleNodeFlowDef("flow-1", "nodeA");
+            FlowDefinition flowDef2 = singleNodeFlowDef("flow-2", "nodeB");
+            FakeActivatableNode failingNode = new FakeActivatableNode("nodeA", new RuntimeException("구독 실패"));
+            FakeActivatableNode healthyNode = new FakeActivatableNode("nodeB");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(failingNode, healthyNode);
+            when(flowEngine.getState("flow-1")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getState("flow-2")).thenReturn(FlowState.RUNNING);
+            when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(failingNode);
+            when(flowEngine.getNode("flow-2", "nodeB")).thenReturn(healthyNode);
+
+            flowManager.deploy(flowDef1);
+            flowManager.deploy(flowDef2);
+
+            assertThatCode(() -> flowManager.applyActivationState(true)).doesNotThrowAnyException();
+
+            assertThat(healthyNode.isActivated()).isTrue();
+        }
     }
 }
