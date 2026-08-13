@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -284,5 +285,42 @@ class EngineDiscoveryServiceTest {
 
         assertThat(this.engineDiscoveryService.listEngines().getFirst().engineRole()).isEqualTo(EngineRole.STANDBY);
         verify(this.listener, times(2)).onPresenceChanged(); // 최초 발견 1회 + role 변화 1회 (presence 자체는 안 바뀜)
+    }
+
+    @Test
+    @DisplayName("discovery-service 장애로 폴백 경로를 타면서 403이 나도, 이미 알던 피어의 priority가 유지된다")
+    void preservesKnownPriorityOnAuthFailedViaFallbackPath() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance))
+                .thenReturn(List.of()); // 두 번째 주기부터 Eureka 장애 흉내 (discovery-service 장애 + 시크릿 불일치 조합)
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        this.engineDiscoveryService.pollPeers(); // 1주기 - 정상 발견, priority=2 확인됨
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().priority()).isEqualTo(2);
+
+        this.engineDiscoveryService.pollPeers(); // 2주기 - Eureka 빈 목록(폴백 경로, metadata 없음) + 403
+
+        EngineInfo peer = this.engineDiscoveryService.listEngines().getFirst();
+        assertThat(peer.presenceStatus()).isEqualTo(PresenceStatus.AUTH_FAILED);
+        assertThat(peer.priority()).isEqualTo(2); // 수정 전엔 Integer.MAX_VALUE로 깨졌음
+    }
+
+    @Test
+    @DisplayName("engine-priority metadata가 숫자가 아니어도 예외 없이 최하위 우선순위로 처리한다")
+    void parsePriorityFallsBackOnMalformedMetadata() {
+        ServiceInstance malformedInstance = new DefaultServiceInstance(
+                "peer-1", "rule-service", "peer-host", 8082, false,
+                Map.of("engine-id", "engine-b", "engine-priority", "not-a-number")
+        );
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(malformedInstance));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatCode(() -> this.engineDiscoveryService.pollPeers()).doesNotThrowAnyException();
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().priority()).isEqualTo(Integer.MAX_VALUE);
     }
 }

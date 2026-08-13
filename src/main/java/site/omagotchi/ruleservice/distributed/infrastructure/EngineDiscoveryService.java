@@ -180,7 +180,12 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 log.warn("[{}] 폴링 인증 실패 (host = {}, port = {}) - INTERNAL_SHARED_SECRET이 양쪽 엔진에 동일하게 설정됐는지 확인하세요", peerEngineId, instance.getHost(), instance.getPort());
             }
 
-            this.knownEngines.put(peerEngineId, new EngineInfo(
+            // 이미 아는 피어면 priority/startedAt/engineRole은 그대로 두고 상태만 바꿈
+            // (폴백 폴링 인스턴스는 metadata가 비어 있어서 새로 파싱하면 priority가 유실되고,
+            // 그러면 상위 우선순위 피어가 최하위로 둔갑해서 AUTH_FAILED 승격 보류 로직이 무력화됨)
+            this.knownEngines.compute(peerEngineId, (k, known) -> Objects.nonNull(known)
+                    ? known.withPresenceStatus(PresenceStatus.AUTH_FAILED)
+                    : new EngineInfo(
                     peerEngineId,
                     instance.getHost(),
                     instance.getPort(),
@@ -248,9 +253,16 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     }
 
     private static int parsePriority(String value) {
-        return Objects.isNull(value)
-                ? Integer.MAX_VALUE
-                : Integer.parseInt(value);
+        if (Objects.isNull(value)) {
+            return Integer.MAX_VALUE;
+        }
+
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            log.warn("[EngineDiscoveryService] engine-priority metadata 파싱 실패 (value = {}) - 최하위 우선순위로 처리", value, e);
+            return Integer.MAX_VALUE;
+        }
     }
 
     // 컨벤션 상 중첩 레코드 허용 (독립된 도메인 개념/상태 X, 여러 소유자가 공유 X, 다른 feature의 공개 계약 X, 중첩 때문에 흐름 방해 X)
