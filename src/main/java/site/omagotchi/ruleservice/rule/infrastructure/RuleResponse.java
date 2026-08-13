@@ -1,6 +1,9 @@
 package site.omagotchi.ruleservice.rule.infrastructure;
 
+import site.omagotchi.ruleservice.rule.domain.Operator;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
+
+import java.util.Objects;
 
 /**
  * GET /api/버전/threshold-rules 응답 바디 */
@@ -12,7 +15,14 @@ public record RuleResponse(
         Double threshold,
         Long ruleVersion
 ) {
+
     public ThresholdRule toRule() {
-        return ThresholdRule.of(ruleId, deviceEui, metric, operator, threshold, ruleVersion);
+        if (Objects.isNull(ruleId) || Objects.isNull(threshold) || Objects.isNull(ruleVersion)) {
+            throw new IllegalArgumentException("필수 필드 누락 ruleId= %s, threshold=%s, ruleVersion= %s"
+                    .formatted(ruleId, threshold, ruleVersion));
+        }
+
+        return new ThresholdRule(
+                ruleId, deviceEui, metric, Operator.from(operator), threshold, ruleVersion);
     }
 }

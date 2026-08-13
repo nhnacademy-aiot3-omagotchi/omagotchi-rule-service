@@ -31,22 +31,6 @@ public record ThresholdRule(
 
     }
 
-    public static ThresholdRule of(
-            Long ruleId,
-            String deviceEui,
-            String metric,
-            String operator,
-            Double threshold,
-            Long ruleVersion) {
-
-        if (Objects.isNull(ruleId) || Objects.isNull(threshold) || Objects.isNull(ruleVersion)) {
-            throw new IllegalArgumentException("필수 필드 누락 ruleId= %s, threshold=%s, ruleVersion= %s"
-                    .formatted(ruleId, threshold, ruleVersion));
-        }
-
-        return new ThresholdRule(ruleId, deviceEui, metric, Operator.from(operator), threshold, ruleVersion);
-    }
-
     /**
      * 룰 버전을 비교하여 최신인지를 확인
      */
