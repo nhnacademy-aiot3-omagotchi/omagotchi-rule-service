@@ -12,8 +12,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
-public class DisconnectDetectorNodeTest {
+class DisconnectDetectorNodeTest {
 
     private LastSeenRegistry registry;
     private DisconnectDetectorNode node;
@@ -136,7 +137,35 @@ public class DisconnectDetectorNodeTest {
         DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh", this.registry, new QualityProperties(Map.of(), List.of()));
         freshNode.initialize();
 
-        freshNode.deactivate(); // activate 호출 전
+        assertThatCode(() -> {
+            freshNode.deactivate(); // activate 호출 전
+            freshNode.deactivate(); // 이미 deactivate된 상태에서 한 번 더
+        }).doesNotThrowAnyException();
+
+        freshNode.shutdown();
+    }
+
+    /**
+     * 이 테스트는 실제로 6초를 기다리는 테스트라서 느림
+     * CHECK_INTERNAL(현재 5초, private 상수)가 나중에 바뀌면 이 테스트의 대기 시간도 같이 조정해야 함 (기억할 것)
+     */
+    @Test
+    @DisplayName("initialize()만 호출하고 activate()를 안 하면, 백그라운드 검사 타이머가 몰래 돌지 않는다")
+    void doesNotRunBackgroundCheckBeforeActivate() throws InterruptedException {
+        // 임계값을 짧게(1초 * 3배 = 3초) 잡아서, 백그라운드 타이머가 몰래 돌고 있었다면
+        // CHECK_INTERVAL(5초) 첫 틱에서 바로 결측으로 오판정해 이벤트를 발행했을 것
+        QualityProperties properties = new QualityProperties(
+                Map.of(), List.of(new QualityProperties.SensorId("eui-2", "temperature", 1))
+        );
+        DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh-check", this.registry, properties);
+        RecordingConnection freshDisconnect = new RecordingConnection();
+        freshNode.getOutputPort("disconnect").connect(freshDisconnect);
+
+        freshNode.initialize(); // activate()는 호출 안 함 - STANDBY 상태를 흉내냄
+
+        Thread.sleep(6_000); // CHECK_INTERVAL(5초)이 최소 한 번은 돌 수 있는 시간만큼 대기
+
+        assertThat(freshDisconnect.messages()).isEmpty();
 
         freshNode.shutdown();
     }

@@ -49,9 +49,6 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
     public void initialize() {
         scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         startedAt = Instant.now();
-
-        long interval = CHECK_INTERVAL.toSeconds();
-        scheduledExecutorService.scheduleAtFixedRate(this::check, interval, interval, TimeUnit.SECONDS);
         super.initialize();
     }
 
