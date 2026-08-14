@@ -18,7 +18,9 @@ import org.testcontainers.utility.DockerImageName;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.connection.Connection;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -38,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MqttSubscriberNodeStandbyTest {
 
     private static final String TOPIC = "test/topic";
-    private static final int MOSQUITTO_PORT = 18883;
+    private static final int MOSQUITTO_PORT = findAvailablePort();
 
     @Container // static 없음 - 테스트 메서드마다 새 컨테이너
     GenericContainer<?> mosquitto = new GenericContainer<>(DockerImageName.parse("eclipse-mosquitto:2"))
@@ -234,6 +236,15 @@ class MqttSubscriberNodeStandbyTest {
         }
 
         throw new IllegalStateException("브로커 재시작 후 포트 응답 대기 시간 초과");
+    }
+
+    // CI 병렬 실행 시 고정 포트 충돌을 피하기 위해 운영체제가 배정하는 빈 포트를 미리 확보
+    private static int findAvailablePort() {
+        try (ServerSocket serverSocket = new ServerSocket(0)) {
+            return serverSocket.getLocalPort();
+        } catch (IOException e) {
+            throw new IllegalStateException("테스트용 빈 포트 확보 실패", e);
+        }
     }
 
     // 백그라운드 MQTT 콜백 스레드가 쓰고, 메인 테스트 스레드가 읽는 구조라 스레드 안전한 컬렉션 필요
