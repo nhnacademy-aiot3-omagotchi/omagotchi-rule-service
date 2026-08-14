@@ -51,6 +51,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     // peerEngineId -> 마지막으로 폴링에 성공한 시각(첫 발견 시점엔 유예를 위해 지금 시각으로 시드)
     private final Map<String, Long> lastPolledSuccessAt = new ConcurrentHashMap<>();
 
+    // peerEngineId -> 마지막으로 403(AUTH_FAILED) 응답을 받은 시각
+    // 이 시각 이후로 403조차 못 받고 연결 자체가 실패하면, 인증 문제가 아니라 진짜로 죽은 것으로 판단
+    private final Map<String, Long> lastAuthFailedAt = new ConcurrentHashMap<>();
+
     public EngineDiscoveryService(DiscoveryClient discoveryClient,
                                   RestClient engineInternalRestClient,
                                   @Value("${spring.application.name}") String applicationName,
@@ -78,9 +82,24 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
     @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.SECONDS)
     public void pollPeers() {
-        boolean discoveredNewPeer = false;
-        boolean peerRoleChanged = false;
         Set<String> polledThisCycle = new HashSet<>();
+
+        // |= (비트 OR) 사용
+        // notableChangeDetected = notableChangeDetected || this.pollFallbackPeers(...) 이렇게 쓰면,
+        // notableChangeDetected가 이미 true인 순간 뒤 조건은 평가 자체를 건너뛰는 단락 평가가 일어나서 pollFallbackPeers()/judgePresence()가 아예 호출 안 될 수 있음
+        boolean notableChangeDetected = this.pollDiscoveredPeers(polledThisCycle);
+        notableChangeDetected |= this.pollFallbackPeers(polledThisCycle);
+        notableChangeDetected |= this.judgePresence();
+
+        if (notableChangeDetected) {
+            this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
+        }
+    }
+
+    // Eureka가 이번 주기에 돌려준 인스턴스들을 폴링
+    // 새 피어 발견 또는 role/presence 변화가 있으면 true
+    private boolean pollDiscoveredPeers(Set<String> polledThisCycle) {
+        boolean notableChangeDetected = false;
 
         try {
             for (ServiceInstance instance : this.discoveryClient.getInstances(this.applicationName)) {
@@ -92,11 +111,11 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
                 // "새 피어 발견"을 별도로 감지해서 항상 알림
                 if (!this.knownEngines.containsKey(peerEngineId)) {
-                    discoveredNewPeer = true; // 처음 보는 피어 - 상태와 무관하게 존재 자체를 알려야 함
+                    notableChangeDetected = true; // 처음 보는 피어 - 상태와 무관하게 존재 자체를 알려야 함
                 }
 
                 if (this.pollOne(peerEngineId, instance)) {
-                    peerRoleChanged = true;
+                    notableChangeDetected = true;
                 }
 
                 polledThisCycle.add(peerEngineId);
@@ -105,8 +124,14 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             log.warn("Eureka 피어 목록 조회 실패 - 이번 주기는 건너뜁니다", e);
         }
 
-        // Eureka가 이번 주기에 못 돌려준(예: discovery-service 재배포로 registry가 잠깐 비는 상황) 피어도 이미 알고 있는 주소로 직접 폴링을 이어감
-        // Eureka 장애 자체가 승격 트리거가 되지 않도록
+        return notableChangeDetected;
+    }
+
+    // Eureka가 이번 주기에 못 돌려준(예: discovery-service 재배포로 registry가 잠깐 비는 상황) 피어도 이미 알고 있는 주소로 직접 폴링을 이어감
+    // Eureka 장애 자체가 승격 트리거가 되지 않도록
+    private boolean pollFallbackPeers(Set<String> polledThisCycle) {
+        boolean notableChangeDetected = false;
+
         for (Map.Entry<String, EngineInfo> entry : this.knownEngines.entrySet()) {
             String peerEngineId = entry.getKey();
 
@@ -124,15 +149,11 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             );
 
             if (this.pollOne(peerEngineId, fallbackInstance)) {
-                peerRoleChanged = true;
+                notableChangeDetected = true;
             }
         }
 
-        boolean statusChanged = this.judgePresence();
-
-        if (discoveredNewPeer || statusChanged || peerRoleChanged) {
-            this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
-        }
+        return notableChangeDetected;
     }
 
     private boolean pollOne(String peerEngineId, ServiceInstance instance) {
@@ -143,6 +164,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     .body(PeerSelfInfo.class);
 
             this.authFailureWarned.remove(peerEngineId); // 복구되면 다음 실패 때 다시 경고할 수 있도록 초기화
+            this.lastAuthFailedAt.remove(peerEngineId); // AUTH_FAILED 추적 상태도 정리
 
             EngineInfo existing = this.knownEngines.get(peerEngineId);
             PresenceStatus previousStatus = Objects.nonNull(existing)
@@ -180,6 +202,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 log.warn("[{}] 폴링 인증 실패 (host = {}, port = {}) - INTERNAL_SHARED_SECRET이 양쪽 엔진에 동일하게 설정됐는지 확인하세요", peerEngineId, instance.getHost(), instance.getPort());
             }
 
+            this.lastAuthFailedAt.put(peerEngineId, this.clock.millis()); // 이 403 자체가 아직 살아있다는 증거
+
             // 이미 아는 피어면 priority/startedAt/engineRole은 그대로 두고 상태만 바꿈
             // (폴백 폴링 인스턴스는 metadata가 비어 있어서 새로 파싱하면 priority가 유실되고,
             // 그러면 상위 우선순위 피어가 최하위로 둔갑해서 AUTH_FAILED 승격 보류 로직이 무력화됨)
@@ -200,13 +224,31 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
         } catch (Exception e) {
             log.debug("[{}] 폴링 실패 (host = {}, port = {})", peerEngineId, instance.getHost(), instance.getPort(), e);
-            this.markFailure(peerEngineId, instance);
 
-            return false;
+            return this.markFailure(peerEngineId, instance); // AUTH_FAILED -> OFFLINE 전환 여부를 그대로 전환
         }
     }
 
-    private void markFailure(String peerEngineId, ServiceInstance instance) {
+    // presenceStatus가 실제로 바뀌었으면(AUTH_FAILED -> OFFLINE) true
+    private boolean markFailure(String peerEngineId, ServiceInstance instance) {
+        EngineInfo known = this.knownEngines.get(peerEngineId);
+
+        if (Objects.nonNull(known) && known.presenceStatus() == PresenceStatus.AUTH_FAILED) {
+            Long lastAuthFailed = this.lastAuthFailedAt.get(peerEngineId);
+            boolean authFailedStale = Objects.isNull(lastAuthFailed) || (this.clock.millis() - lastAuthFailed) >= OFFLINE_THRESHOLD_MS;
+
+            if (authFailedStale) {
+                // 403(인증거부)조차 최근에 못 받음 - "살아있는데 인증만 거부"가 아니라 진짜로 죽은 것으로 판단
+                log.warn("[{}] AUTH_FAILED 상태에서 {}ms 이상 403 응답도 못 받음 - OFFLINE으로 전환", peerEngineId, OFFLINE_THRESHOLD_MS);
+                this.knownEngines.put(peerEngineId, known.withPresenceStatus(PresenceStatus.OFFLINE));
+                this.lastAuthFailedAt.remove(peerEngineId);
+
+                return true;
+            }
+
+            return false;
+        }
+
         // 처음 보는 피어에게는 유예를 줌 - 지금 막 발견됐다는 이유만으로 바로 OFFLINE 판정하지 않음
         this.lastPolledSuccessAt.putIfAbsent(peerEngineId, this.clock.millis());
         this.knownEngines.putIfAbsent(peerEngineId, new EngineInfo(
@@ -218,6 +260,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 PresenceStatus.ONLINE, // 첫 발견 유예
                 null // 폴링 실패라 engineRole을 아직 모름
         ));
+
+        return false;
     }
 
     private boolean judgePresence() {

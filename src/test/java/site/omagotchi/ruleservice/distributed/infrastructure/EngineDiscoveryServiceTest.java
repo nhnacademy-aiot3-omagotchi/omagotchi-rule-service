@@ -39,7 +39,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 class EngineDiscoveryServiceTest {
 
-    private static final long OFFLINE_THRESHOLD_MS = 12_000L;
+    private static final long OFFLINE_THRESHOLD_MS = 3_000L;
     private static final String PEER_URL = "http://peer-host:8082/api/v1/internal/engines/self";
     private static final String PEER_RESPONSE = """
             {"engineId":"engine-b","host":"peer-host","port":8082,"priority":2,"startedAt":0,"engineRole":"STANDBY"}
@@ -322,5 +322,59 @@ class EngineDiscoveryServiceTest {
         assertThatCode(() -> this.engineDiscoveryService.pollPeers()).doesNotThrowAnyException();
 
         assertThat(this.engineDiscoveryService.listEngines().getFirst().priority()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    @DisplayName("AUTH_FAILED 상태에서 연결 실패가 OFFLINE_THRESHOLD_MS 안이면 아직 AUTH_FAILED를 유지한다")
+    void staysAuthFailedWhenConnectionFailureIsWithinThreshold() {
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withServerError());
+
+        this.engineDiscoveryService.pollPeers(); // 403 (AUTH_FAILED)
+
+        this.clock.advance(Duration.ofMillis(2_000)); // 실제 OFFLINE_THRESHOLD_MS(3000ms)보다 짧게
+        this.engineDiscoveryService.pollPeers(); // 연결 실패, 아직 threshold 안 지남
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.AUTH_FAILED);
+    }
+
+    @Test
+    @DisplayName("AUTH_FAILED 상태에서 403조차 못 받고 OFFLINE_THRESHOLD_MS 이상 지나면 OFFLINE으로 전환하고 알림이 온다")
+    void transitionsAuthFailedToOfflineWhenNoForbiddenResponseForThreshold() {
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withServerError());
+
+        this.engineDiscoveryService.pollPeers(); // 403 - AUTH_FAILED, 알림 1회(최초 발견)
+
+        this.clock.advance(Duration.ofMillis(3_001L)); // 실제 OFFLINE_THRESHOLD_MS(3000ms) 초과
+        this.engineDiscoveryService.pollPeers(); // 연결 실패, 마지막 403 이후 threshold 초과 - OFFLINE 전환
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.OFFLINE);
+        verify(this.listener, times(2)).onPresenceChanged(); // 최초 발견 1회 + OFFLINE 전환 1회
+    }
+
+    @Test
+    @DisplayName("403을 계속 받고 있으면 타임스탬프가 매번 갱신되어, 뒤늦은 연결 실패 한 번만으로 바로 OFFLINE 처리되지 않는다")
+    void refreshesAuthFailedTimestampOnEachForbiddenResponse() {
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withServerError());
+
+        this.engineDiscoveryService.pollPeers(); // 1차 403 - lastAuthFailedAt 기록
+
+        this.clock.advance(Duration.ofMillis(3_001L)); // 실제 threshold 초과 경과
+        this.engineDiscoveryService.pollPeers(); // 2차 403 - 여전히 살아있음, lastAuthFailedAt 갱신돼야 함
+
+        this.clock.advance(Duration.ofMillis(2_000L)); // 방금 갱신된 시각 기준으론 아직 threshold(3000ms) 안 지남
+        this.engineDiscoveryService.pollPeers(); // 연결 실패 - 갱신이 제대로 안 됐다면(putIfAbsent 버그) 여기서 OFFLINE으로 잘못 전환됐을 것
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.AUTH_FAILED);
     }
 }
