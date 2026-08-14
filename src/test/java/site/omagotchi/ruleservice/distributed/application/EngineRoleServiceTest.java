@@ -408,6 +408,50 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 여전히 ACTIVE 유지
     }
 
+    @Test
+    @DisplayName("이미 ACTIVE인 상태에서 상위 우선순위 피어도 ONLINE+ACTIVE를 보고하면(이중 ACTIVE), 히스테리시스 없이 즉시 STANDBY로 강등한다")
+    void selfHealsImmediatelyWhenHigherPriorityPeerAlsoReportsActive() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE (상위 피어 안 보임)
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        // 통신이 복구되어 상위 우선순위 피어도 ACTIVE로 폴링됨 (스플릿 브레인 상태 발견)
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE, EngineRole.ACTIVE)
+        ));
+        engineRoleService.reevaluate();
+
+        // 일반 failback 히스테리시스(연속 2회 확인)를 기다리지 않고 즉시 전환돼야 함
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.flowManager).applyActivationState(false);
+    }
+
+    @Test
+    @DisplayName("상위 우선순위 피어가 AUTH_FAILED 상태이고 낡은 ACTIVE 흔적만 남아있으면, 자가 치유가 발동하지 않고 일반 failback 히스테리시스를 그대로 따른다")
+    void doesNotSelfHealOnStaleActiveRoleFromAuthFailedPeer() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        // 상위 피어가 AUTH_FAILED로 전환됐지만, withPresenceStatus()로 인해 예전 engineRole(ACTIVE)이 그대로 남아있음
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.AUTH_FAILED, EngineRole.ACTIVE)
+        ));
+        engineRoleService.reevaluate();
+
+        // 자가 치유는 발동하지 않아야 함(ONLINE이 아니므로) - 대신 기존 AUTH_FAILED failback 경로(히스테리시스)를 그대로 탐
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 1번째 확인이라 아직 안 바뀜
+        verify(this.flowManager, never()).applyActivationState(false);
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */

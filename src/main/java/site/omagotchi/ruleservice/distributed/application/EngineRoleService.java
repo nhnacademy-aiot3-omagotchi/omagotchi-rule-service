@@ -96,6 +96,17 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             return;
         }
 
+        // 자가 치유: 나도 액티브인데 상위 우선순위 피어도 액티를 보고하면 (최신 폴링 기준)
+        // 확실한 이중 액티브 신호이므로, 일반 failback 히스테리시스를 기다리지 않고 즉시 강등
+        if (this.currentRole == EngineRole.ACTIVE && this.higherPriorityPeerReportsActive()) {
+            log.warn("[EngineRoleService] 상위 우선순위 피어도 ACTIVE를 보고함 (이중 ACTIVE 감지) - 즉시 STANDBY로 강등");
+
+            this.standbyConfirmCount = 0;
+            this.applyRoleChange(EngineRole.STANDBY);
+
+            return;
+        }
+
         EngineRole judged = this.judgeRole();
 
         // 판정이 지금 롤이랑 같으면 할 것 없음 (기존과 동일)
@@ -131,6 +142,16 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
 
         this.standbyConfirmCount = 0;
         this.applyRoleChange(judged); // 2번째면 진짜로 STANDBY로 전환
+    }
+
+    private boolean higherPriorityPeerReportsActive() {
+        int myPriority = this.engineProperties.priority();
+        String myId = this.engineProperties.id();
+
+        return this.engineDirectoryPort.listEngines().stream()
+                .filter(engineInfo -> isHigherPriority(engineInfo, myPriority, myId))
+                .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE
+                        && engineInfo.engineRole() == EngineRole.ACTIVE);
     }
 
     // grace 경과 후 재확인 - 그 사이 상위 우선순위 피어가 복귀했으면 judgeRole()이 다시 STANDBY로 나와 자동으로 무효화됨
