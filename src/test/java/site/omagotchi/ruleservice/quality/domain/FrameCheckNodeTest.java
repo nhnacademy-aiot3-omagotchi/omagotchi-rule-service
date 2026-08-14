@@ -240,4 +240,54 @@ class FrameCheckNodeTest {
         QualityEvent event = missing.messages().get(0).get("qualityEvent");
         assertThat(event.detail()).isEqualTo("결측: fCnt 101~199 누락 (99건)");
     }
+
+
+    @Test
+    @DisplayName("갭이 정확히 20건이면 상한 이내라서 개별 신고 20건이 발행된다 (20/21 경계)")
+    void gapSizeExactlyTwentyReportsIndividuallyTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 100L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 121L));
+
+        assertThat(missing.messages()).hasSize(20);
+        QualityEvent first = missing.messages().get(0).get("qualityEvent");
+        QualityEvent last = missing.messages().get(19).get("qualityEvent");
+        assertThat(first.detail()).isEqualTo("결측: fCnt 101 누락");
+        assertThat(last.detail()).isEqualTo("결측: fCnt 120 누락");
+    }
+
+    @Test
+    @DisplayName("갭이 21건이면 상한을 넘어서 요약 신고 1건으로 발행된다 (20/21 경계)")
+    void gapSizeTwentyOneSummarizesIntoOneEventTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 100L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 122L));
+
+        assertThat(missing.messages()).hasSize(1);
+        QualityEvent event = missing.messages().get(0).get("qualityEvent");
+        assertThat(event.detail()).isEqualTo("결측: fCnt 101~121 누락 (21건)");
+    }
+
+    @Test
+    @DisplayName("대량 결측 요약 신고 이후에도 lastFcnt가 갱신되어 다음 메시지가 정상 통과한다 (return 버그 회귀 테스트)")
+    void continuesNormalProcessingAfterHugeGapSummaryTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 100L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 200L));   // 요약 신고 발생
+        node.process(message("co2", 652.0, BASE.plusSeconds(120), BASE.plusSeconds(120), 201L)); // 이어서 정상 +1
+
+        assertThat(out.messages()).hasSize(3);
+        assertThat(missing.messages()).hasSize(1);   // 요약 1건뿐, 3번째 메시지에서 추가 신고 없음
+    }
+
+    @Test
+    @DisplayName("대량 결측 요약 신고 이후에도 지연 판정이 정상 동작한다")
+    void delayedDetectionStillWorksAfterHugeGapSummaryTest() {
+        node.process(message("co2", 650.0, BASE, BASE, 100L));
+        node.process(message("co2", 651.0, BASE.plusSeconds(60), BASE.plusSeconds(60), 200L));   // 요약 신고 발생
+
+        Instant measuredAt = BASE.plusSeconds(120);
+        Instant receivedAt = measuredAt.plusSeconds(61);
+        node.process(message("co2", 652.0, measuredAt, receivedAt, 201L));
+
+        assertThat((Boolean) out.messages().get(2).get("_delayed")).isTrue();
+        assertThat(delayed.messages()).hasSize(1);
+    }
 }
