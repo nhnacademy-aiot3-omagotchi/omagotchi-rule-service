@@ -122,7 +122,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         }
 
         // 지금 STANDBY인데 판정이 ACTIVE로 나왔다 = 내가 승격해야 할 것 같다
-        // failover 후보이면(STANDBY -> ACTIVE) 순간 오탐 방지 위해 즉시 전환 안 하고 스케줄링으로 confirmFailover를 grace(5초) 뒤 예약(grace 뒤 재확인)
+        // failover 후보이면(STANDBY -> ACTIVE) 순간 오탐 방지 위해 즉시 전환 안 하고 스케줄링으로 confirmFailover를 grace(1.5초) 뒤 예약(grace 뒤 재확인)
         if (judged == EngineRole.ACTIVE) {
             log.debug("failover 후보 감지 - {}ms 뒤 재확인", GRACE_MS);
             this.taskScheduler.schedule(this::confirmFailover, Instant.now(this.clock).plusMillis(GRACE_MS));
@@ -160,10 +160,10 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             return; // 이미 다른 경로로 ACTIVE 전환됐으면 중복 실행 방지 (멱등)
         }
 
-        EngineRole judged = this.judgeRole(); // 5초 지난 지금 시점에 다시 판정
+        EngineRole judged = this.judgeRole(); // grace(1.5초) 지난 지금 시점에 다시 판정
 
         if (judged == EngineRole.ACTIVE) {
-            this.applyRoleChange(judged); // 5초 뒤에도 여전히 ACTIVE 판정 나면 그제서야 진짜 전환
+            this.applyRoleChange(judged); // grace(1.5초) 뒤에도 여전히 ACTIVE 판정 나면 그제서야 진짜 전환
         } else {
             log.debug("grace 동안 피어 복귀 - failover 취소"); // 그 사이 피어가 돌아왔으면 아무것도 안 하고 끝
         }
