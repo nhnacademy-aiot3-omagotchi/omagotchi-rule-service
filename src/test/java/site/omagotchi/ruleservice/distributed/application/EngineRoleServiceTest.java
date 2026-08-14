@@ -108,7 +108,7 @@ class EngineRoleServiceTest {
 
     @Test
     @DisplayName("같은 역할로 재판정되면 activate, deactivate를 다시 호출하지 않는다")
-    void ReevaluatedToSameRoleThenDoNotCallActivateOrDeactivate() {
+    void reevaluatedToSameRoleThenDoNotCallActivateOrDeactivate() {
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
 
         EngineRoleService engineRoleService = newService();
@@ -170,7 +170,7 @@ class EngineRoleServiceTest {
         verify(this.flowManager, never()).applyActivationState(true);
 
         this.clock.advance(Duration.ofMillis(5_000L));
-        this.runLastScheduledTast(); // confirmFailover() 실행 - 재계산해도 여전히 없음
+        this.runLastScheduledTask(); // confirmFailover() 실행 - 재계산해도 여전히 없음
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
         verify(this.flowManager).applyActivationState(true);
@@ -195,7 +195,7 @@ class EngineRoleServiceTest {
         )); // grace 도중 복귀
 
         this.clock.advance(Duration.ofMillis(5_000L));
-        this.runLastScheduledTast(); // confirmFailover() 재계산 시점엔 이미 복귀함 -> 스탠바이 유지
+        this.runLastScheduledTask(); // confirmFailover() 재계산 시점엔 이미 복귀함 -> 스탠바이 유지
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
         verify(this.flowManager, never()).applyActivationState(true);
@@ -221,7 +221,7 @@ class EngineRoleServiceTest {
         verify(this.flowManager, never()).applyActivationState(false);
 
         this.clock.advance(Duration.ofMillis(5_000));
-        this.runLastScheduledTast(); // 2번째 확인
+        this.runLastScheduledTask(); // 2번째 확인
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
         verify(this.flowManager).applyActivationState(false);
@@ -338,7 +338,7 @@ class EngineRoleServiceTest {
         verify(this.flowManager, times(1)).applyActivationState(true);
 
         this.clock.advance(Duration.ofMillis(3_000L));
-        this.runLastScheduledTast(); // 예약된 재시도 실행
+        this.runLastScheduledTask(); // 예약된 재시도 실행
 
         verify(this.flowManager, times(2)).applyActivationState(true); // 재시도로 한 번 더 호출됨
     }
@@ -384,7 +384,7 @@ class EngineRoleServiceTest {
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */
-    private void runLastScheduledTast() {
+    private void runLastScheduledTask() {
         ArgumentCaptor<Runnable> captor = ArgumentCaptor.forClass(Runnable.class);
 
         verify(this.taskScheduler, atLeastOnce())

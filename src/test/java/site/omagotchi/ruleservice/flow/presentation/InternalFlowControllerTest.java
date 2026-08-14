@@ -58,7 +58,7 @@ class InternalFlowControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/internal/flows/{flow-id}/restart는 restartFromPeer만 호출하고 restart는 호출하지 않는다")
-    void restartFromPeereCallsLocalApplyOnlyTest() {
+    void restartFromPeerCallsLocalApplyOnlyTest() {
         ResponseEntity<Void> response = this.internalFlowController.restartFromPeer(FLOW_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
