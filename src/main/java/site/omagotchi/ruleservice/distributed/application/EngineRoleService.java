@@ -33,8 +33,10 @@ import java.util.Objects;
 )
 public class EngineRoleService implements EnginePresenceListener, EngineActivePort {
 
-    private static final long INITIAL_WAIT_MS = 15_000L;
-    private static final long GRACE_MS = 1_500L;
+    // 테스트에서도 프로덕션과 동일한 값을 참조하도록 패키지 프라이빗으로
+    static final long INITIAL_WAIT_MS = 15_000L;
+    static final long GRACE_MS = 1_500L;
+
     private static final long ACTIVATION_RETRY_DELAY_MS = 3_000L; // 실패 시 한 번 재시도 할 때 사용
     private static final int FAILBACK_CONFIRMATIONS = 2;
     private static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;

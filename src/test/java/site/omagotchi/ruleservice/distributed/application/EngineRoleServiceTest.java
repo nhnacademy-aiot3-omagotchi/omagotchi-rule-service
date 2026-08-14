@@ -17,10 +17,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
+import static site.omagotchi.ruleservice.distributed.application.EngineRoleService.GRACE_MS;
+import static site.omagotchi.ruleservice.distributed.application.EngineRoleService.INITIAL_WAIT_MS;
 
 class EngineRoleServiceTest {
-
-    private static final long INITIAL_WAIT_MS = 15_000L;
 
     private EngineDirectoryPort engineDirectoryPort;
     private EngineProperties engineProperties;
@@ -164,12 +164,18 @@ class EngineRoleServiceTest {
 
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of()); // 상위 피어 사라짐
 
-        engineRoleService.reevaluate(); // failover 후보 - grace 예약
+        Instant judgedAt = Instant.now(this.clock);
+        engineRoleService.reevaluate(); // failover 후보 (grace 예약)
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY); // 아직 안 바뀜
         verify(this.flowManager, never()).applyActivationState(true);
 
-        this.clock.advance(Duration.ofMillis(5_000L));
+        ArgumentCaptor<Instant> scheduledAt = ArgumentCaptor.forClass(Instant.class);
+        verify(this.taskScheduler).schedule(any(Runnable.class), scheduledAt.capture());
+
+        assertThat(scheduledAt.getValue()).isEqualTo(judgedAt.plusMillis(GRACE_MS)); // 예약 시간이 실제 GRACE_MS만큼 뒤인지 고정 검증
+
+        this.clock.advance(Duration.ofMillis(GRACE_MS));
         this.runLastScheduledTask(); // confirmFailover() 실행 - 재계산해도 여전히 없음
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
@@ -194,7 +200,7 @@ class EngineRoleServiceTest {
                 peer("engine-0", 1, PresenceStatus.ONLINE)
         )); // grace 도중 복귀
 
-        this.clock.advance(Duration.ofMillis(5_000L));
+        this.clock.advance(Duration.ofMillis(GRACE_MS));
         this.runLastScheduledTask(); // confirmFailover() 재계산 시점엔 이미 복귀함 -> 스탠바이 유지
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
@@ -220,7 +226,7 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 안 바뀜
         verify(this.flowManager, never()).applyActivationState(false);
 
-        this.clock.advance(Duration.ofMillis(5_000));
+        this.clock.advance(Duration.ofMillis(GRACE_MS));
         this.runLastScheduledTask(); // 2번째 확인
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
@@ -312,7 +318,7 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 히스테리시스 대기중이라 즉시는 안 바뀜
         verify(this.flowManager, never()).applyActivationState(false);
 
-        this.clock.advance(Duration.ofMillis(5_000));
+        this.clock.advance(Duration.ofMillis(GRACE_MS));
         this.runLastScheduledTask(); // 재확인 - 여전히 AUTH_FAILED
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
