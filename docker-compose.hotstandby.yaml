@@ -1,27 +1,31 @@
 # 분산 엔진 검증용 - engine-a/engine-b 두 인스턴스를 로컬에서 동시에 띄워 Eureka 등록·상호 발견이 정상 동작하는지 확인하기 위한 로컬 전용 구성
 # 실제 서버 배포(discovery-service, RabbitMQ, MQTT 등 학교 제공 인프라)와는 별개
 
-# 사전 조건: omagotchi-identity-service를 이 저장소와 같은 레벨에 클론해두고,
-# 07-local-development.md에 나와있는 것처럼 secrets/jwt-*.pem을 생성해둬야 함.
-# (폴더명이 다르면 아래 volumes 경로를 맞게 바꿀 것)
+# 사전 조건:
+# 1. discovery-service를 각자의 로컬머신에서 직접 기동해둘 것 (EUREKA_URL이 host.docker.internal을 가리킴)
+#    - RabbitMQ/MQTT/InfluxDB/learning-service는 로컬이 아니라 실제 원격 공유 인프라를 그대로 씀 (.env.local 값 통과, 별도 오버라이드 없음)
+# 2. omagotchi-identity-service를 이 저장소와 같은 레벨에 클론해두고,
+#    07-local-development.md에 나와있는 것처럼 secrets/jwt-*.pem을 생성해둘 것
+#    (폴더명이 다르면 아래 volumes 경로를 맞게 바꿀 것)
+# 3. .env.local.example을 .env.local로 복사해서 채워둘 것
 
 services:
   engine-a:
     build: .
     image: omagotchi-rule-service:hotstandby-local
-    env_file: .env
+    env_file: .env.local
     environment:
       SERVER_PORT: 8081
       ENGINE_ID: engine-a
       ENGINE_PRIORITY: 1
-      SENSOR_CLIENT_ID: rule-engine-1
+      SENSOR_CLIENT_ID: rule-service-1
       EUREKA_ENABLED: "true"
       EUREKA_URL: http://host.docker.internal:8761/eureka/
       JWT_PUBLIC_KEY_LOCATION: file:/identity-secrets/jwt-public.pem
     volumes:
       - ../omagotchi-identity-service/secrets:/identity-secrets:ro
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:host-gateway" # Mac/Windows Docker Desktop은 자동 지원하나, Linux Docker Engine은 이게 없으면 host.docker.internal이 안 먹혀서 명시해두었음(Linux 환경에서 개발하는 팀원 전용)
     ports:
       - "8081:8081"
     healthcheck:
@@ -34,12 +38,12 @@ services:
   engine-b:
     build: .
     image: omagotchi-rule-service:hotstandby-local
-    env_file: .env
+    env_file: .env.local
     environment:
       SERVER_PORT: 8082
       ENGINE_ID: engine-b
       ENGINE_PRIORITY: 2
-      SENSOR_CLIENT_ID: rule-engine-2
+      SENSOR_CLIENT_ID: rule-service-2
       EUREKA_ENABLED: "true"
       EUREKA_URL: http://host.docker.internal:8761/eureka/
       JWT_PUBLIC_KEY_LOCATION: file:/identity-secrets/jwt-public.pem
