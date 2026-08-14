@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.*;
+import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
@@ -74,7 +75,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
                 mqttConnectionOptions.setPassword(password.getBytes(StandardCharsets.UTF_8));
             }
 
-            mqttAsyncClient = new MqttAsyncClient(brokerUrl, clientId);
+            // 구독 전용 노드라 클라이언트 측 영속화가 필요 없음 (발행 없음 + 구독 QoS 1)
+            // 기본값인 파일 영속화를 쓰면 작업 디렉터리에 <clientId>-q-mqtt-sub/ 가 생기고 센서 페이로드가 .msg로 남음
+            // 세션 재개(cleanStart = false)는 브로커가 clientId로 관리하므로 이 설정과 무관
+            mqttAsyncClient = new MqttAsyncClient(brokerUrl, clientId, new MemoryPersistence());
 
             // 콜백 받을 객체 설정
             mqttAsyncClient.setCallback(this);

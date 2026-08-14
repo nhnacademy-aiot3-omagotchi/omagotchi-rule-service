@@ -5,6 +5,7 @@ import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.eclipse.paho.mqttv5.client.MqttAsyncClient;
+import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,7 +69,9 @@ class MqttSubscriberNodeStandbyTest {
         node.getOutputPort("out").connect(outConnection);
         node.initialize();
 
-        publisher = new MqttAsyncClient(brokerUrl, "publisher-test");
+        // 테스트 publisher도 파일 영속화 디렉터리를 남기지 않도록 메모리 영속화 사용
+        // 테스트 publisher는 QoS 1로 발행하지만, in-flight 상태가 디스크 대신 메모리에 있을 뿐이라 발행 자체는 동일하게 동작함 (테스트는 JVM 재시작을 거치지 않으니 내구성 필요 X)
+        publisher = new MqttAsyncClient(brokerUrl, "publisher-test", new MemoryPersistence());
         publisher.connect().waitForCompletion();
     }
 
