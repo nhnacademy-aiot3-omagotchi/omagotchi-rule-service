@@ -36,10 +36,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static site.omagotchi.ruleservice.distributed.infrastructure.EngineDiscoveryService.OFFLINE_THRESHOLD_MS;
 
 class EngineDiscoveryServiceTest {
 
-    private static final long OFFLINE_THRESHOLD_MS = 3_000L;
     private static final String PEER_URL = "http://peer-host:8082/api/v1/internal/engines/self";
     private static final String PEER_RESPONSE = """
             {"engineId":"engine-b","host":"peer-host","port":8082,"priority":2,"startedAt":0,"engineRole":"STANDBY"}
@@ -142,7 +142,7 @@ class EngineDiscoveryServiceTest {
         this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS + 1));
         this.engineDiscoveryService.pollPeers(); // 폴링 실패
 
-        assertThat(this.engineDiscoveryService.listEngines().get(0).presenceStatus()).isEqualTo(PresenceStatus.OFFLINE);
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.OFFLINE);
         verify(this.listener, times(2)).onPresenceChanged();
     }
 

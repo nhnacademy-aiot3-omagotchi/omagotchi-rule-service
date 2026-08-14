@@ -35,7 +35,8 @@ import java.util.concurrent.TimeUnit;
 )
 public class EngineDiscoveryService implements EngineDirectoryPort {
 
-    private static final long OFFLINE_THRESHOLD_MS = 3_000L;
+    // 테스트에서도 프로덕션과 동일한 값을 참조하도록 패키지 프라이빗으로 노출
+    static final long OFFLINE_THRESHOLD_MS = 3_000L;
 
     private final DiscoveryClient discoveryClient;
     private final RestClient engineInternalRestClient;
