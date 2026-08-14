@@ -40,6 +40,10 @@ eureka:
       enabled: true
     serviceUrl:
       defaultZone: ${EUREKA_URL}
+    # filter-only-up-instances: false는 환경 설정이 아니라, 앱 동작의 전제조건임
+    # true(Eureka 기본값)로 되돌리면, Eureka가 getInstances()에서 DOWN 처리된 인스턴스는 리턴 목록에 포함 안 함
+    # RabbitMQ 등 헬스체크 대상이 잠깐만 죽어도(또는 재기동 직후/신규 엔진처럼 knownEngines가 아직 비어 있는 순간) 피어가 목록에서 서로를 발견 못 하고 둘 다 ACTIVE로 판정될 수 있음
+    # (스플릿 브레인 위험 - 이 값을 정리하지 말 것)
     filter-only-up-instances: false
     registry-fetch-interval-seconds: 5
 
