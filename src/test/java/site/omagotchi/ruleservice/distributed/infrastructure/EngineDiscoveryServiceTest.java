@@ -377,4 +377,62 @@ class EngineDiscoveryServiceTest {
 
         assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.AUTH_FAILED);
     }
+
+    @Test
+    @DisplayName("AUTH_FAILED에서 폴링이 성공해 ONLINE으로 복구되면 리스너에게 알림이 간다")
+    void notifiesWhenPeerRecoversFromAuthFailedToOnline() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers(); // 최초 발견 + AUTH_FAILED - 알림 1회
+        this.engineDiscoveryService.pollPeers(); // 시크릿 복구 - ONLINE 전이라 알림이 또 와야 함
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus())
+                .isEqualTo(PresenceStatus.ONLINE);
+        verify(this.listener, times(2)).onPresenceChanged();
+    }
+
+    @Test
+    @DisplayName("ONLINE이던 피어가 403을 받아 AUTH_FAILED로 바뀌면 리스너에게 알림이 간다")
+    void notifiesWhenPeerTransitionsFromOnlineToAuthFailed() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        this.engineDiscoveryService.pollPeers(); // 최초 발견 - 알림 1회
+        this.engineDiscoveryService.pollPeers(); // 403 - AUTH_FAILED 전이라 알림이 또 와야 함
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus())
+                .isEqualTo(PresenceStatus.AUTH_FAILED);
+        verify(this.listener, times(2)).onPresenceChanged();
+    }
+
+    @Test
+    @DisplayName("403이 연속으로 나면 첫 전이 때만 알리고 그 뒤로는 중복 알림하지 않는다")
+    void doesNotNotifyRepeatedlyWhileStayingAuthFailed() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance));
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        this.engineDiscoveryService.pollPeers(); // 최초 발견 + AUTH_FAILED - 알림 1회
+        this.engineDiscoveryService.pollPeers();
+        this.engineDiscoveryService.pollPeers();
+
+        verify(this.listener, times(1)).onPresenceChanged();
+    }
 }

@@ -192,9 +192,11 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
             this.lastPolledSuccessAt.put(peerEngineId, this.clock.millis());
 
-            // 피어의 role 변화도 presenceStatus 전이와 동일하게 리스너에게 알려야 함
+            // presenceStatus 전이(특히 AUTH_FAILED -> ONLINE)와 피어 role 변화 모두 리스너에게 알려야 함
+            // judgePresence()는 이미 ONLINE으로 덮인 뒤를 보므로, AUTH_FAILED 복구를 잡아내지 못함
             // (안 그러면 failback 대기 중인 엔진이 상대가 실제로 강등되는 순간을 영영 못 보고 재판정 기회를 잃음)
-            return previousRole != response.engineRole;
+            return previousStatus != statusToCarry
+                    || previousRole != response.engineRole();
 
         } catch (HttpClientErrorException.Forbidden e) {
             // 상대가 살아서 응답은 했지만 인증을 거부함 - "죽었다"는 증거가 아니라 설정 오류일 가능성이 높음
@@ -205,11 +207,17 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
             this.lastAuthFailedAt.put(peerEngineId, this.clock.millis()); // 이 403 자체가 아직 살아있다는 증거
 
+            EngineInfo known = this.knownEngines.get(peerEngineId);
+
+            // judgePresence()가 AUTH_FAILED를 건너뛰므로, 이 전이는 여기서 직접 알리지 않으면 리스너가 영영 못 봄
+            boolean statusChanged = Objects.isNull(known)
+                    || known.presenceStatus() != PresenceStatus.AUTH_FAILED;
+
             // 이미 아는 피어면 priority/startedAt/engineRole은 그대로 두고 상태만 바꿈
             // (폴백 폴링 인스턴스는 metadata가 비어 있어서 새로 파싱하면 priority가 유실되고,
             // 그러면 상위 우선순위 피어가 최하위로 둔갑해서 AUTH_FAILED 승격 보류 로직이 무력화됨)
-            this.knownEngines.compute(peerEngineId, (k, known) -> Objects.nonNull(known)
-                    ? known.withPresenceStatus(PresenceStatus.AUTH_FAILED)
+            this.knownEngines.compute(peerEngineId, (k, existing) -> Objects.nonNull(existing)
+                    ? existing.withPresenceStatus(PresenceStatus.AUTH_FAILED)
                     : new EngineInfo(
                     peerEngineId,
                     instance.getHost(),
@@ -221,7 +229,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
             ));
 
             // lastPolledSuccessAt은 일부러 안 건드림 - judgePresence()가 AUTH_FAILED는 타임아웃 판정에서 제외하므로 무의미
-            return false;
+            return statusChanged;
 
         } catch (Exception e) {
             log.debug("[{}] 폴링 실패 (host = {}, port = {})", peerEngineId, instance.getHost(), instance.getPort(), e);
