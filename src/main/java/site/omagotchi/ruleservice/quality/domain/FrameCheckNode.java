@@ -76,46 +76,47 @@ public class FrameCheckNode extends AbstractNode {
             String eui = sensorReading.deviceEui();
             Long last = lastFcnt.getIfPresent(eui);
 
-            if (last == null) {
+
+            if (last == null) {             // ① 처음 보는 센서 - 기준값만 저장
                 lastFcnt.put(eui, fCnt);
 
-            } else if (fCnt == last) {
-                // 같은 프레임의 다른 측정항목 (정상)
+            } else if (fCnt == last) {      // ② 같은 프레임의 다른 측정항목 (정상)
 
-            } else if (fCnt == last + 1) {
+            } else if (fCnt == last + 1) {  // ③ 정상적으로 1씩 증가 - 기준값 갱신
                 lastFcnt.put(eui, fCnt);
                 resetCandidate.invalidate(eui);
 
-            } else if (fCnt > last + 1) {
+            } else if (fCnt > last + 1) {   // ④ 갭 크기에 따라 개별/요약 신고로 갈림
                 long gapSize = fCnt - last - 1;
-                if (gapSize > MAX_MISSING_REPORTS) {
+
+                if (gapSize > MAX_MISSING_REPORTS) {    // 갭이 너무 크면 개별 신고 대신 요약 1건으로 (로그 폭주 방지)
                     log.warn("[결측] {} fCnt {}~{} 누락 ({}건 일괄)", sensorReading.deviceEui(), last + 1, fCnt - 1, gapSize);
                     QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
                             "결측: fCnt " + (last + 1) + "~" + (fCnt - 1) + " 누락 (" + gapSize + "건)");
                     send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
-                    return;
+
+                } else {                                // 갭이 작으면 빠진 fCnt마다 개별 신고
+                    for (long missingFcnt = last + 1; missingFcnt < fCnt; missingFcnt++) {
+                        log.warn("[결측] {} fCnt {} 누락", sensorReading.deviceEui(), missingFcnt);
+                        QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
+                                "결측: fCnt " + missingFcnt + " 누락");
+                        send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
+                    }
                 }
-                for (long missingFcnt = last + 1; missingFcnt < fCnt; missingFcnt++) {
-                    log.warn("[결측] {} fCnt {} 누락", sensorReading.deviceEui(), missingFcnt);
-                    QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
-                            "결측: fCnt " + missingFcnt + " 누락");
-                    send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
-                }
+                // 개별/요약 신고와 무관하게 기준값은 항상 갱신
                 lastFcnt.put(eui, fCnt);
                 resetCandidate.invalidate(eui);
 
-            //fCnt < last 인 경우
-            } else {
+            } else {                        // ⑤ fCnt < last - 순서역전인지, 재조인(리셋)인지 후보로 확인
                 Long candidate = resetCandidate.getIfPresent(eui);
-                if (candidate != null && fCnt == candidate) {
-                    // 같은 프레임의 다른 항목
-                } else if (candidate != null && fCnt == candidate + 1) {
+                if (candidate != null && fCnt == candidate) {               // 같은 프레임의 다른 항목
+
+                } else if (candidate != null && fCnt == candidate + 1) {    // 재조인(리셋) 확정
                     log.info("[fCnt리셋] {} 재조인 관측 (fCnt {} -> {} 연속)", eui, candidate, fCnt);
                     lastFcnt.put(eui, fCnt);
                     resetCandidate.invalidate(eui);
-                } else {
+                } else {                // 새로 의심 등록
                     log.warn("[순서역전] {} (fCnt {} 도착, 최신 {})", eui, fCnt, last);
-                    //새로 의심 등록
                     resetCandidate.put(eui, fCnt);
                 }
             }
