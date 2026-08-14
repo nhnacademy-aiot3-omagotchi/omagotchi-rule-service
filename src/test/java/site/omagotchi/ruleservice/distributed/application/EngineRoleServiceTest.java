@@ -293,6 +293,33 @@ class EngineRoleServiceTest {
     }
 
     @Test
+    @DisplayName("이미 ACTIVE인 상태에서 상위 피어가 AUTH_FAILED로 바뀌면, 계속 ACTIVE를 유지하지 않고 STANDBY로 판정한다")
+    void higherPriorityAuthFailedTriggersFailbackWhenAlreadyActive() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE (상위 피어 없음)
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        // 상위 피어가 시크릿 불일치로 AUTH_FAILED 상태로 나타남 (예: A가 복구되었지만 시크릿이 어긋남)
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.AUTH_FAILED)
+        ));
+        engineRoleService.reevaluate(); // failback 후보로 감지돼야 함 (ACTIVE를 계속 유지하면 안 됨)
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 히스테리시스 대기중이라 즉시는 안 바뀜
+        verify(this.flowManager, never()).applyActivationState(false);
+
+        this.clock.advance(Duration.ofMillis(5_000));
+        this.runLastScheduledTask(); // 재확인 - 여전히 AUTH_FAILED
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.flowManager).applyActivationState(false);
+    }
+
+    @Test
     @DisplayName("최초 판정 때 낮은 우선순위 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작한다")
     void initialAssignmentStartsAsStandbyWhenLowerPriorityPeerAlreadyActive() {
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(

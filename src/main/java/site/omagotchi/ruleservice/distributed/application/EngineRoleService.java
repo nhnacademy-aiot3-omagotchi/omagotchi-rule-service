@@ -167,6 +167,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         boolean higherPriorityOnline = higherPriorityPeers.stream()
                 .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE);
 
+        // 상위 피어가 살아있고, STANDBY로 있는 것이 옳음
         if (higherPriorityOnline) {
             return EngineRole.STANDBY;
         }
@@ -176,10 +177,8 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
 
         if (higherPriorityAuthFailed) {
             // 상위 우선순위 피어가 응답은 하지만 인증에서 거부됨 - 죽었다는 증거가 아니므로 승격하지 않음
-            // 이미 역할이 있으면 그대로 유지, 최초 판정이면 안전하게 STANDBY
-            log.warn("[EngineRoleService] 상위 우선순위 피어가 AUTH_FAILED 상태 - 승격 보류 (INTERNAL_SHARED_SECRET 설정 확인 필요, 현재 역할 유지: {})", this.currentRole);
-
-            return Objects.requireNonNullElse(this.currentRole, EngineRole.STANDBY);
+            log.warn("[EngineRoleService] 상위 우선순위 피어가 AUTH_FAILED 상태 - 승격 보류, STANDBY로 판정 (INTERNAL_SHARED_SECRET 설정 확인 필요)");
+            return EngineRole.STANDBY;
         }
 
         // 최초 판정인데 낮은 우선순위가 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작
