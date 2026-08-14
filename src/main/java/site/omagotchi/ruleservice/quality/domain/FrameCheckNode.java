@@ -93,13 +93,13 @@ public class FrameCheckNode extends AbstractNode {
                     QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
                             "결측: fCnt " + (last + 1) + "~" + (fCnt - 1) + " 누락 (" + gapSize + "건)");
                     send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
-                    return;
-                }
-                for (long missingFcnt = last + 1; missingFcnt < fCnt; missingFcnt++) {
-                    log.warn("[결측] {} fCnt {} 누락", sensorReading.deviceEui(), missingFcnt);
-                    QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
-                            "결측: fCnt " + missingFcnt + " 누락");
-                    send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
+                } else {
+                    for (long missingFcnt = last + 1; missingFcnt < fCnt; missingFcnt++) {
+                        log.warn("[결측] {} fCnt {} 누락", sensorReading.deviceEui(), missingFcnt);
+                        QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.MISSING,
+                                "결측: fCnt " + missingFcnt + " 누락");
+                        send("missing", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
+                    }
                 }
                 lastFcnt.put(eui, fCnt);
                 resetCandidate.invalidate(eui);
