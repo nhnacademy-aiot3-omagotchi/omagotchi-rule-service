@@ -35,7 +35,7 @@ class RuleControllerTest {
     @DisplayName("GET /api/v1/rules는 RuleCache.getAll() 결과를 그대로 200으로 반환한다")
     void getRulesReturnsCacheSnapshot() {
         List<ThresholdRule> rules = List.of(
-                new ThresholdRule(1L, "device-1", "co2", Operator.GT, 1000.0, 1L, 1L)
+                new ThresholdRule(1L, "device-1", "co2", Operator.GT, 1000.0, 1L)
         );
         when(ruleCache.getAll()).thenReturn(rules);
 

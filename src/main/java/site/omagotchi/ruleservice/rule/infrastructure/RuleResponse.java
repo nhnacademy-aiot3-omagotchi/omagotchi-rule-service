@@ -3,22 +3,26 @@ package site.omagotchi.ruleservice.rule.infrastructure;
 import site.omagotchi.ruleservice.rule.domain.Operator;
 import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 
+import java.util.Objects;
+
 /**
- * core에 GET 요청을 보냈을 경우 반환되는 응답 객체
- */
+ * GET /api/버전/threshold-rules 응답 바디 */
 public record RuleResponse(
         Long ruleId,
         String deviceEui,
         String metric,
         String operator,
         Double threshold,
-        Long ruleVersion,
-        Long updatedAt
+        Long ruleVersion
 ) {
-    /**
-     * 응답은 null을 허용하여 느슨하게 입력받음. 검증은 ThresholdRule에서 실행
-     */
+
     public ThresholdRule toRule() {
-        return new ThresholdRule(ruleId, deviceEui, metric, Operator.from(operator), threshold, ruleVersion, updatedAt);
+        if (Objects.isNull(ruleId) || Objects.isNull(threshold) || Objects.isNull(ruleVersion)) {
+            throw new IllegalArgumentException("필수 필드 누락 ruleId= %s, threshold=%s, ruleVersion= %s"
+                    .formatted(ruleId, threshold, ruleVersion));
+        }
+
+        return new ThresholdRule(
+                ruleId, deviceEui, metric, Operator.from(operator), threshold, ruleVersion);
     }
 }

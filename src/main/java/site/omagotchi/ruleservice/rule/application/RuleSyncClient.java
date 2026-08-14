@@ -130,7 +130,7 @@ public class RuleSyncClient {
         // 나중에 fetchAll()의 호출부가 새로 생겼을 때 그곳에서 MDC 세팅을 깜빡하고 안 하면, MDC.get(...)가 null 리턴하고, X-Request-ID에 null이 들어가버릴 수 있음
         String requestId = MDC.get(MDC_REQUEST_ID_KEY);
 
-        RestClient.RequestHeadersSpec<?> spec = restClient.get().uri("/api/rules");
+        RestClient.RequestHeadersSpec<?> spec = restClient.get().uri("/api/v1/threshold-rules");
 
         // requestId가 null이면 헤더를 아예 안 붙이도록 방어
         if (Objects.nonNull(requestId)) {
@@ -141,6 +141,10 @@ public class RuleSyncClient {
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<RuleResponse>>() {
                 });
+
+        if(Objects.isNull(responses)){ //본문이 비어있는경우를 대비 (룰 설정이 안되어있다는게 아닌 걍 본문을 못받음)
+            throw new IllegalStateException("룰 본문이 null입니다.");
+        }
 
         List<ThresholdRule> rules = new ArrayList<>();
         for (RuleResponse response : responses) {
