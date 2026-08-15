@@ -435,4 +435,48 @@ class EngineDiscoveryServiceTest {
 
         verify(this.listener, times(1)).onPresenceChanged();
     }
+
+    @Test
+    @DisplayName("폴링 응답의 engineId가 Eureka 메타데이터와 다르면 그 응답의 priority/role을 신뢰하지 않는다")
+    void ignoresPeerClaimsWhenResponseEngineIdDoesNotMatchMetadata() {
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        // 메타데이터는 engine-id=engine-b인데, 응답은 다른 엔진을 자칭하며 최상위 우선순위/액티브를 주장
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess("""
+                        {"engineId":"사칭하는 엔진","host":"peer-host","port":8082,"priority":0,"startedAt":0,"engineRole":"ACTIVE"}
+                        """, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers();
+
+        EngineInfo stored = this.engineDiscoveryService.listEngines().getFirst();
+
+        assertThat(stored.engineId()).isEqualTo("engine-b");
+        assertThat(stored.priority()).isEqualTo(2); // 사칭 응답 0이 아니라 메타데이터 값
+        assertThat(stored.engineRole()).isNull(); // 사칭 응답의 액티브를 반영 안 함
+    }
+
+    @Test
+    @DisplayName("신원 불일치가 이어지면 진짜 피어에 닿지 못한 것으로 보고 임계 후 OFFLINE으로 판정한다")
+    void marksOfflineWhenIdentityMismatchPersists() {
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(this.peerInstance));
+
+        String impostor = """
+                {"engineId":"evil-engine","host":"peer-host","port":8082,"priority":0,"startedAt":0,"engineRole":"ACTIVE"}
+                """;
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withSuccess(impostor, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(requestTo(PEER_URL)).andRespond(withSuccess(impostor, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers(); // 첫 발견 - 유예
+
+        this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS + 1));
+        this.engineDiscoveryService.pollPeers();
+
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.OFFLINE);
+
+        long mismatchCount = this.appender.list.stream()
+                .filter(event -> event.getFormattedMessage().contains("Eureka 메타데이터와 다름"))
+                .count();
+        assertThat(mismatchCount).isEqualTo(1); // 반복돼도 경고는 한 번만
+    }
 }

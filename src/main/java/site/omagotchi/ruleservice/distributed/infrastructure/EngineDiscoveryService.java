@@ -46,6 +46,9 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private final Clock clock;
     private final Set<String> authFailureWarned = ConcurrentHashMap.newKeySet(); // 동시성 문제 X
 
+    // 신원 불일치 경고를 피어당 한 번만 남기기 위한 셋 (1초마다 반복 로깅 방지)
+    private final Set<String> identityMismatchWarned = ConcurrentHashMap.newKeySet();
+
     // peerEngineId -> 현재 알려진 정보(판정된 presenceStatus 포함)
     private final Map<String, EngineInfo> knownEngines = new ConcurrentHashMap<>();
 
@@ -164,6 +167,20 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                     .retrieve()
                     .body(PeerSelfInfo.class);
 
+            // 응답한 엔진이 Eureka 메타데이터가 약속한 그 엔진인지 확인
+            // (레지스트리 위장 등록, 메타데이터 오설정을 걸러냄 - 이 응답의 priority/engineRole이 그대로 쓰이므로)
+            if (Objects.isNull(response) || !peerEngineId.equals(response.engineId())) {
+                if (this.identityMismatchWarned.add(peerEngineId)) {
+                    log.error("[{}] 폴링 응답의 engineId가 Eureka 메타데이터와 다름 (응답 = {}, host = {}, port = {}) - 신뢰하지 않고 폴링 실패로 처리",
+                            peerEngineId, Objects.isNull(response) ? null : response.engineId(), instance.getHost(), instance.getPort());
+                }
+
+                // 믿을 수 없는 응답 = 그 피어에 닿지 못한 것과 같게 취급
+                // (사칭 인스턴스가 응답한다고 해서 진짜 피어가 살아있는 것처럼 보이면 안 되니까)
+                return this.markFailure(peerEngineId, instance);
+            }
+
+            this.identityMismatchWarned.remove(peerEngineId);
             this.authFailureWarned.remove(peerEngineId); // 복구되면 다음 실패 때 다시 경고할 수 있도록 초기화
             this.lastAuthFailedAt.remove(peerEngineId); // AUTH_FAILED 추적 상태도 정리
 
