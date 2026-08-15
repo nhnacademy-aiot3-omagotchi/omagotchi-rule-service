@@ -8,6 +8,7 @@ import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Activatable;
 import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -24,6 +25,7 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
 
     private final LastSeenRegistry lastSeenRegistry;
     private final QualityProperties qualityProperties;
+    private final Clock clock;
 
     private ScheduledExecutorService scheduledExecutorService;
     private ScheduledFuture<?> checkTask;
@@ -34,10 +36,12 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
     private static final int DISCONNECT_MULTIPLIER = 3;                            //판정 배수
     private static final int DEFAULT_INTERVAL_SECONDS = 60;                     //기본 센서 측정 주기
 
-    public DisconnectDetectorNode(String id, LastSeenRegistry lastSeenRegistry, QualityProperties qualityProperties) {
+    public DisconnectDetectorNode(String id, LastSeenRegistry lastSeenRegistry, QualityProperties qualityProperties, Clock clock) {
         super(id);
         this.lastSeenRegistry = lastSeenRegistry;
         this.qualityProperties = qualityProperties;
+        this.clock = clock;
+
         addOutputPort("disconnect");
     }
 
@@ -48,7 +52,7 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
     @Override
     public void initialize() {
         scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-        startedAt = Instant.now();
+        startedAt = Instant.now(this.clock);
         super.initialize();
     }
 
@@ -80,7 +84,7 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
         }
 
         // 전환 직후 결측 판정 유예를 위해 활성화 시점을 기준으로 새로 잡음
-        this.startedAt = Instant.now();
+        this.startedAt = Instant.now(this.clock);
         this.disconnectKeys.clear();
 
         long interval = CHECK_INTERVAL.toSeconds();
@@ -102,37 +106,34 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
 
     // 테스트에서 직접 호출하기 위해 package-private
     void check() {
-        Instant now = Instant.now();
+        Instant now = Instant.now(this.clock);
+        Instant baseline = this.startedAt; // 순회 중 activate()가 끼어들어도 한 번의 판정은 같은 기준으로
 
         for (QualityProperties.SensorId sensor : qualityProperties.inventory()) {
-
             String deviceEui = sensor.deviceEui();
             String measurement = sensor.measurement();
             Optional<Instant> lastSeen = lastSeenRegistry.lastSeenAt(deviceEui, measurement);
-            boolean isDisconnect;
-            int intervalSeconds = sensor.expectedIntervalSeconds() != null ? sensor.expectedIntervalSeconds() : DEFAULT_INTERVAL_SECONDS;
+            int intervalSeconds = sensor.expectedIntervalSeconds() != null
+                    ? sensor.expectedIntervalSeconds()
+                    : DEFAULT_INTERVAL_SECONDS;
             Duration threshold = Duration.ofSeconds(intervalSeconds).multipliedBy(DISCONNECT_MULTIPLIER);
 
-            if (lastSeen.isEmpty() && Duration.between(startedAt, now).compareTo(threshold) < 0) {
-                continue;
-            }
+            // STANDBY 기간에는 메시지가 안 들어와서 레지스트리 값이 그대로 낡음
+            // 재승격 직후 그 값으로 판정하면 전 센서가 한꺼번에 결측으로 잡히므로, 활성화 시점보다 과거인 lastSeen은 "아직 못 받음"과 동일하게 보고 유예를 적용
+            Instant effectiveLastSeen = lastSeen.filter(seen -> seen.isAfter(baseline))
+                    .orElse(baseline);
 
-            if (lastSeen.isEmpty()) {
-                isDisconnect = true;   // 한 번도 안 옴 → 결측
-            } else {
-                Duration sinceLastSeen = Duration.between(lastSeen.get(), now);
-                isDisconnect = sinceLastSeen.compareTo(threshold) > 0;   // 임계값 넘게 안 옴 → 결측
-            }
+            boolean isDisconnect = Duration.between(effectiveLastSeen, now).compareTo(threshold) > 0;
 
             String key = key(deviceEui, measurement);
-            boolean wasDisconnect = disconnectKeys.contains(key);
+            boolean wasDisconnect = this.disconnectKeys.contains(key);
 
             if (isDisconnect && !wasDisconnect) {
                 disconnectKeys.add(key);
                 log.info("[{}] {}", DETAIL_START, key);
                 QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui, measurement, DETAIL_START);
-                send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
 
+                send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
             } else if (!isDisconnect && wasDisconnect) {
                 disconnectKeys.remove(key);
                 log.info("[{}] {}", DETAIL_END, key);

@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.quality.domain;
 
+import site.omagotchi.ruleservice.distributed.application.MutableClock;
 import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
 import org.junit.jupiter.api.AfterEach;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -16,19 +18,23 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 class DisconnectDetectorNodeTest {
 
+    private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
+
     private LastSeenRegistry registry;
     private DisconnectDetectorNode node;
     private RecordingConnection disconnect;
+    private MutableClock clock;
 
     @BeforeEach
     void setUp() {
         registry = new LastSeenRegistry();
+        clock = new MutableClock(T0);
 
         QualityProperties properties = new QualityProperties(
                 Map.of(), List.of(new QualityProperties.SensorId("eui-1", "temperature", 60))
         );
 
-        node = new DisconnectDetectorNode("disconnect", registry, properties);
+        node = new DisconnectDetectorNode("disconnect", registry, properties, clock);
         disconnect = new RecordingConnection();
         node.getOutputPort("disconnect").connect(disconnect);
 
@@ -52,12 +58,13 @@ class DisconnectDetectorNodeTest {
     @Test
     @DisplayName("임계를 넘게 소식이 없으면 끊김 시작을 발행한다")
     void disconnectStartTest() {
-        registry.update("eui-1", "temperature", Instant.now().minusSeconds(300));
+        registry.update("eui-1", "temperature", Instant.now(clock)); // 활성화 직후 수신
+        clock.advance(Duration.ofSeconds(300)); // 임계(180초) 초과
 
         node.check();
 
         assertThat(disconnect.messages()).hasSize(1);
-        QualityEvent qualityEvent = disconnect.messages().get(0).get("qualityEvent");
+        QualityEvent qualityEvent = disconnect.messages().getFirst().get("qualityEvent");
         assertThat(qualityEvent.type()).isEqualTo(QualityEvent.Type.DISCONNECTED);
         assertThat(qualityEvent.deviceEui()).isEqualTo("eui-1");
         assertThat(qualityEvent.detail()).isEqualTo("끊김 시작");
@@ -66,7 +73,8 @@ class DisconnectDetectorNodeTest {
     @Test
     @DisplayName("끊김 상태가 이어져도 신고를 반복하지 않는다")
     void noRepeatedAlertTest() {
-        registry.update("eui-1", "temperature", Instant.now().minusSeconds(300));
+        registry.update("eui-1", "temperature", Instant.now(clock));
+        clock.advance(Duration.ofSeconds(300)); // 임계(180초) 초과
 
         node.check();
         node.check();
@@ -78,10 +86,11 @@ class DisconnectDetectorNodeTest {
     @Test
     @DisplayName("다시 수신되면 끊김 종료를 발행한다")
     void disconnectEndTest() {
-        registry.update("eui-1", "temperature", Instant.now().minusSeconds(300));
-        node.check();
+        registry.update("eui-1", "temperature", Instant.now(clock));
+        clock.advance(Duration.ofSeconds(300)); // 임계(180초) 초과
+        node.check(); // 끊김 시작
 
-        registry.update("eui-1", "temperature", Instant.now());
+        registry.update("eui-1", "temperature", Instant.now(clock)); // 다시 수신
         node.check();
 
         assertThat(disconnect.messages()).hasSize(2);
@@ -93,19 +102,19 @@ class DisconnectDetectorNodeTest {
     @DisplayName("센서마다 설정된 주기에 따라 임계가 다르게 적용된다")
     void perSensorThresholdTest() {
         QualityProperties properties = new QualityProperties(Map.of(), List.of(
-                new QualityProperties.SensorId("fast", "temperature", 5),
-                new QualityProperties.SensorId("slow", "temperature", 900)
+                new QualityProperties.SensorId("fast", "temperature", 5),   // 임계 15초
+                new QualityProperties.SensorId("slow", "temperature", 900)  // 임계 2700초
         ));
-        DisconnectDetectorNode node2 = new DisconnectDetectorNode("d2", registry, properties);
+        DisconnectDetectorNode node2 = new DisconnectDetectorNode("d2", registry, properties, clock);
         RecordingConnection disconnect2 = new RecordingConnection();
         node2.getOutputPort("disconnect").connect(disconnect2);
         node2.initialize();
         node2.activate();
 
-        Instant twentySecondsAgo = Instant.now().minusSeconds(20);
-        registry.update("fast", "temperature", twentySecondsAgo);
-        registry.update("slow", "temperature", twentySecondsAgo);
+        registry.update("fast", "temperature", Instant.now(clock));
+        registry.update("slow", "temperature", Instant.now(clock));
 
+        clock.advance(Duration.ofSeconds(20)); // fast만 임계 초과
         node2.check();
 
         assertThat(disconnect2.messages()).hasSize(1);
@@ -118,15 +127,18 @@ class DisconnectDetectorNodeTest {
     @Test
     @DisplayName("deactivate 후 다시 activate 하면 결측 상태가 초기화되어 다시 신고한다")
     void resetsStateAfterDeactivateThenReactivate() {
-        this.registry.update("eui-1", "temperature", Instant.now().minusSeconds(300));
+        this.registry.update("eui-1", "temperature", Instant.now(this.clock));
+        this.clock.advance(Duration.ofSeconds(300));
 
         this.node.check(); // 첫 결측 신고
         assertThat(this.disconnect.messages()).hasSize(1);
 
-        this.node.deactivate(); // STANDBY 전환 (missingSensors 초기화되어야 함)
-        this.node.activate(); // 다시 ACTIVE 전환
+        this.node.deactivate(); // STANDBY 전환 (disconnectKeys 초기화)
+        this.node.activate(); // 다시 ACTIVE 전환 (startedAt도 리셋)
 
-        this.node.check(); // registry 상태는 그대로(여전히 결측 상황)인데, 내부 상태가 리셋됐으니 다시 신고해야 햄
+        this.clock.advance(Duration.ofSeconds(300)); // 재활성화 이후로도 임계를 넘김
+
+        this.node.check(); // 내부 상태가 리셋됐으니 다시 신고해야 함
 
         assertThat(this.disconnect.messages()).hasSize(2);
     }
@@ -134,7 +146,7 @@ class DisconnectDetectorNodeTest {
     @Test
     @DisplayName("activate 전이거나 이미 deactivate된 상태에서 deactivate를 호출해도 예외 안 던진다")
     void deactivateIsSafeWhenNotActivated() {
-        DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh", this.registry, new QualityProperties(Map.of(), List.of()));
+        DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh", this.registry, new QualityProperties(Map.of(), List.of()), this.clock);
         freshNode.initialize();
 
         assertThatCode(() -> {
@@ -157,7 +169,7 @@ class DisconnectDetectorNodeTest {
         QualityProperties properties = new QualityProperties(
                 Map.of(), List.of(new QualityProperties.SensorId("eui-2", "temperature", 1))
         );
-        DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh-check", this.registry, properties);
+        DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh-check", this.registry, properties, this.clock);
         RecordingConnection freshDisconnect = new RecordingConnection();
         freshNode.getOutputPort("disconnect").connect(freshDisconnect);
 
