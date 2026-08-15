@@ -15,7 +15,7 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-public class MqttSubscriberNodeTest {
+class MqttSubscriberNodeTest {
 
     private static final String TOPIC_FILTER = "application/#";
     private static final String CLIENT_ID = "rule-service-mqtt-sub";
@@ -32,6 +32,7 @@ public class MqttSubscriberNodeTest {
 
         out = new RecordingConnection();
         node.getOutputPort("out").connect(out);
+        node.activate(); // 게이트 열기 - 아직 connect 전이라 브로커 없이도 동작
     }
 
     @Test
@@ -45,7 +46,7 @@ public class MqttSubscriberNodeTest {
 
         assertThat(out.messages()).hasSize(1);
 
-        Message message = out.messages().get(0);
+        Message message = out.messages().getFirst();
         String topic = message.get("topic");
         String raw = message.get("raw");
         Instant receivedAt = message.get("receivedAt");
@@ -66,7 +67,7 @@ public class MqttSubscriberNodeTest {
 
         assertThat(out.messages()).hasSize(2);
 
-        String first = out.messages().get(0).getTraceId();
+        String first = out.messages().getFirst().getTraceId();
         String second = out.messages().get(1).getTraceId();
         assertThat(first).isNotBlank();
         assertThat(second).isNotBlank().isNotEqualTo(first);
@@ -95,7 +96,7 @@ public class MqttSubscriberNodeTest {
         node.messageArrived("iot/a/b/c/d/co2",
                 new MqttMessage(payload.getBytes(StandardCharsets.UTF_8)));
 
-        String raw = out.messages().get(0).get("raw");
+        String raw = out.messages().getFirst().get("raw");
         assertThat(raw).contains("실습실 센서");
     }
 
@@ -110,6 +111,36 @@ public class MqttSubscriberNodeTest {
     @DisplayName("onProcess는 빈 구현이라 입력을 받아도 아무것도 내보내지 않는다")
     void processDoesNothing() {
         node.process(Message.of(java.util.Map.of("topic", "iot/a/b/c/d/co2")));
+
+        assertThat(out.messages()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("activate 전에는 콜백으로 메시지가 들어와도 out으로 내보내지 않는다")
+    void dropsMessageWhenNotActivated() throws Exception {
+        node.deactivate(); // setUp에서 열어둔 게이트를 닫음 (아직 connect 전이라 브로커 호출 없음)
+
+        node.messageArrived("iot/test/co2", new MqttMessage("{\"value\":1}".getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(out.messages()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("비활성 상태에서 폐기한 메시지는 수신 건수 카운터에도 잡히지 않는다")
+    void doesNotCountDroppedMsg() throws Exception {
+        node.deactivate();
+
+        node.messageArrived("iot/test/co2", new MqttMessage("{\"value\":1}".getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(meterRegistry.counter("mqtt.messages.received", "topicFilter", TOPIC_FILTER).count()).isZero();
+    }
+
+    @Test
+    @DisplayName("shutdown 하면 게이트가 닫혀서, 재기동 후 역할 판정 전에 메시지를 처리하지 않는다")
+    void shutdownClosesGate() throws Exception {
+        node.shutdown(); // stop 상황 - 이후 start 되어도 게이트는 닫힌 채여야 함
+
+        node.messageArrived("iot/test/co2", new MqttMessage("{\"value\":1}".getBytes(StandardCharsets.UTF_8)));
 
         assertThat(out.messages()).isEmpty();
     }
