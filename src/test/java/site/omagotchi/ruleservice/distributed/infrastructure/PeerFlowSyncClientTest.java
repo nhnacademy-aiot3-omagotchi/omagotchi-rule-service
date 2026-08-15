@@ -17,9 +17,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
@@ -130,5 +128,46 @@ class PeerFlowSyncClientTest {
 
         assertThatCode(() -> this.peerFlowSyncClient.syncStart(FLOW_ID))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("OFFLINE 피어에는 전달을 시도하지 않는다")
+    void skipsOfflinePeer() {
+        EngineInfo offlinePeer = new EngineInfo("engine-c", "dead-host", 8083, 3, 0L, PresenceStatus.OFFLINE, null);
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(offlinePeer));
+
+        this.peerFlowSyncClient.syncStart(FLOW_ID);
+
+        this.restServiceServer.verify(); // 기대한 요청을 하나도 등록하지 않았으므로, 요청이 나갔다면 실패함
+    }
+
+    @Test
+    @DisplayName("AUTH_FAILED 피어에도 전달을 시도하지 않는다")
+    void skipsAuthFailedPeer() {
+        EngineInfo authFailedPeer = new EngineInfo("engine-c", "peer-host-2", 8083, 3, 0L, PresenceStatus.AUTH_FAILED, null);
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(authFailedPeer));
+
+        this.peerFlowSyncClient.syncReconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 30));
+
+        this.restServiceServer.verify(); // 기대한 요청을 하나도 등록하지 않았으므로, 요청이 나갔다면 실패함
+    }
+
+    @Test
+    @DisplayName("ONLINE 피어와 죽은 피어가 섞여 있으면 ONLINE 피어에만 전달한다")
+    void sendsOnlyToOnlinePeers() {
+        EngineInfo offlinePeer = new EngineInfo("engine-c", "dead-host", 8083, 3, 0L, PresenceStatus.OFFLINE, null);
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                this.peerB, offlinePeer
+        ));
+
+        this.restServiceServer.expect(requestTo("http://peer-host:8082/api/v1/internal/flows/flow-1/start"))
+                .andRespond(withNoContent());
+
+        this.peerFlowSyncClient.syncStart(FLOW_ID);
+
+        this.restServiceServer.verify(); // engine-b로 간 요청 1건만 있어야 함
     }
 }
