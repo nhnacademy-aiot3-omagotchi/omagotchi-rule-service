@@ -31,7 +31,7 @@ class EngineRoleServiceTest {
     @BeforeEach
     void setUp() {
         this.engineDirectoryPort = mock(EngineDirectoryPort.class);
-        this.engineProperties = new EngineProperties("engine-a", 1);
+        this.engineProperties = new EngineProperties("engine-a", 1, 1);
         this.flowManager = mock(FlowManager.class);
         this.taskScheduler = mock(TaskScheduler.class);
         this.clock = new MutableClock(Instant.now());

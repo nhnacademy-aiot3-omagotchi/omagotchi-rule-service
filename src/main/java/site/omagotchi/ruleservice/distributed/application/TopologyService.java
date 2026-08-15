@@ -24,6 +24,7 @@ public class TopologyService {
 
     private final FlowManager flowManager;
     private final EngineDirectoryPort engineDirectoryPort;
+    private final EngineProperties engineProperties;
 
     public FlowTopologyResponse getTopology(String flowId) {
 
@@ -42,7 +43,15 @@ public class TopologyService {
                 .filter(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.AUTH_FAILED)
                 .toList();
 
-        if (offlinePeers.isEmpty() && authFailedPeers.isEmpty()) {
+        // 피어가 아예 안 보이는 것도 정상이 아님 - 이중화가 확보되지 않은 단독 운전이므로
+        // (의도적으로 단일 엔진으로 운영할 때는 expected-peer-count를 0으로 내려서 이 검사를 끔)
+        long onlinePeerCount = peers.stream()
+                .filter(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE)
+                .count();
+        int expectedPeerCount = this.engineProperties.expectedPeerCount();
+        boolean redundancyShortFall = onlinePeerCount < expectedPeerCount;
+
+        if (offlinePeers.isEmpty() && authFailedPeers.isEmpty() && !redundancyShortFall) {
             return new FlowTopologyResponse(
                     flowId,
                     TopologyHealth.HEALTHY,
@@ -70,6 +79,11 @@ public class TopologyService {
                             .map(EngineInfo::engineId)
                             .collect(Collectors.joining(", "))
             ));
+        }
+
+        // OFFLINE/AUTH_FAILED 목록이 이미 부족분을 설명하고 있으면 중복해서 덧붙이지 않음
+        if (redundancyShortFall && message.isEmpty()) {
+            message.append("이중화 미확보 - 발견된 ONLINE 피어 %d개 (기대 %d개)".formatted(onlinePeerCount, expectedPeerCount));
         }
 
         return new FlowTopologyResponse(

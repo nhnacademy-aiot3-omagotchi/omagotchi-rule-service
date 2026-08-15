@@ -95,6 +95,9 @@ influx:
 engine:
   id: ${ENGINE_ID}
   priority: ${ENGINE_PRIORITY}
+  # 정상 상태에서 발견해야 하는 본인 이외의 엔진 수 (이중화 A/B 구성이면 1)
+  # 의도적으로 단일 엔진으로 내릴 때는 0으로 낮춰야 topology가 계속 DEGRADED로 남지 않음 (기본값 1로 설정하였음)
+  expected-peer-count: ${ENGINE_EXPECTED_PEER_COUNT:1}
 
 quality:
   ranges:

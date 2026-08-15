@@ -29,7 +29,8 @@ class TopologyServiceTest {
     void setUp() {
         this.flowManager = mock(FlowManager.class);
         this.engineDirectoryPort = mock(EngineDirectoryPort.class);
-        this.topologyService = new TopologyService(this.flowManager, this.engineDirectoryPort);
+        EngineProperties engineProperties = new EngineProperties("engine-a", 1, 1); // 기대 피어 1개(A/B 이중화 구성)
+        this.topologyService = new TopologyService(this.flowManager, this.engineDirectoryPort, engineProperties);
     }
 
     @Test
@@ -58,11 +59,26 @@ class TopologyServiceTest {
     }
 
     @Test
-    @DisplayName("피어가 하나도 없어도 HEALTHY로 판정한다")
-    void healthyWhenNoPeers() {
+    @DisplayName("피어가 하나도 없으면 이중화 미확보이므로 DEGRADED로 판정")
+    void degradedWhenNoPeersButPeerExpected() {
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
 
         FlowTopologyResponse response = this.topologyService.getTopology("flow-1");
+
+        assertThat(response.topologyHealth()).isEqualTo(TopologyHealth.DEGRADED);
+        assertThat(response.reason()).contains("이중화 미확보");
+    }
+
+    @Test
+    @DisplayName("기대 피어 수가 0이면(의도적 단일 엔진 운영) 피어가 없어도 HEALTHY로 판정한다")
+    void healthyWhenNoPeersAndNoneExpected() {
+        TopologyService singleEngineModeTopology = new TopologyService(
+                this.flowManager, this.engineDirectoryPort, new EngineProperties("engine-a", 1, 0)
+        );
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        FlowTopologyResponse response = singleEngineModeTopology.getTopology("flow-1");
 
         assertThat(response.topologyHealth()).isEqualTo(TopologyHealth.HEALTHY);
     }

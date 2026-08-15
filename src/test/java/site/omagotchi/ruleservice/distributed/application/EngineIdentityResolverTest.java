@@ -25,7 +25,7 @@ class EngineIdentityResolverTest {
     @Test
     @DisplayName("기동 시점에 EngineProperties + Port가 해석한 주소 + Clock으로 self EngineInfo를 한 번만 계산한다")
     void buildsSelfFromEnginePropertiesAndResolvedAddress() {
-        EngineProperties engineProperties = new EngineProperties("engine-a", 1);
+        EngineProperties engineProperties = new EngineProperties("engine-a", 1, 1);
 
         when(this.engineAddressResolverPort.resolveHost()).thenReturn("10.0.0.5");
 
@@ -48,7 +48,7 @@ class EngineIdentityResolverTest {
     @Test
     @DisplayName("host는 직접 계산 안 하고 Port가 해석한 주소를 그대로 신뢰한다")
     void trustsEurekaRegisteredAddressOverLocalResolution() {
-        EngineProperties engineProperties = new EngineProperties("engine-b", 2);
+        EngineProperties engineProperties = new EngineProperties("engine-b", 2, 1);
 
         when(this.engineAddressResolverPort.resolveHost()).thenReturn("172.18.0.3");
         EngineIdentityResolver resolver = new EngineIdentityResolver(engineProperties, this.engineAddressResolverPort, 8082, Clock.systemUTC());

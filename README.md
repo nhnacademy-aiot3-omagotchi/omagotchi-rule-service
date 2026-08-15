@@ -74,6 +74,7 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 
 - 애플리케이션: `SERVER_PORT`, `CORE_BASE_URL`
 - 엔진 식별: `ENGINE_ID`, `ENGINE_PRIORITY`
+- 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0) 
 - 엔진 간 내부 통신: `INTERNAL_SHARED_SECRET`
 - Discovery: `EUREKA_ENABLED`, `EUREKA_URL`
 - JWT: `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_PUBLIC_KEY_LOCATION`
