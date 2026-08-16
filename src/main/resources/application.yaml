@@ -5,7 +5,8 @@ spring:
   task:
     scheduling:
       pool:
-        size: 2 # 1개가 원래 기본값
+        # 1개가 원래 기본값. pollPeers(1초 주기)/reSync(5분 주기)/EngineRoleService 단발 타이머들이 공유하므로, reSync가 지연돼도 failover 타이머가 밀리지 않도록 여유 확보
+        size: 4
   application:
     name: rule-service
   rabbitmq:

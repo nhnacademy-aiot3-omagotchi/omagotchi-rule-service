@@ -16,7 +16,14 @@ public class RestClientConfig {
      */
     @Bean
     public RestClient restClient(CoreClientProperties properties) {
-        return RestClient.builder().baseUrl(properties.baseUrl()).build();
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(1_000); // 연결 타임아웃 1초
+        factory.setReadTimeout(3_000); // 읽기 타임아웃 3초 (learning-service API가 행에 걸려도 스케줄러 스레드를 무기한 점유하지 않도록)
+
+        return RestClient.builder()
+                .baseUrl(properties.baseUrl())
+                .requestFactory(factory)
+                .build();
     }
 
     /**
