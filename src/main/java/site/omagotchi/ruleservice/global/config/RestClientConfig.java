@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import site.omagotchi.ruleservice.global.security.InternalAuthHeader;
 
 @Configuration
 public class RestClientConfig {
@@ -36,9 +37,18 @@ public class RestClientConfig {
         factory.setConnectTimeout(300); // 연결 타임아웃 300ms
         factory.setReadTimeout(500); // 읽기 타임아웃 500ms
 
-        return RestClient.builder()
-                .requestFactory(factory)
-                .defaultHeader("X-Internal-Token", sharedSecret)
-                .build();
+        return applyInternalAuth(
+                RestClient.builder().requestFactory(factory),
+                sharedSecret
+        ).build();
+    }
+
+    /**
+     * 내부 API 호출에 공유 시크릿 헤더를 붙임
+     * 이 부착이 빠지면 모든 피어 폴링이 403이 되어 상호 AUTH_FAILED로 빠지므로, 테스트가 이 계약을 직접 고정할 수 있도록 분리해둠
+     * RequestFactory 설정은 일부러 여기 넣지 않음 - 테스트가 MockRestServiceServer를 바인딩할 때 호출 순서에 의존하지 않게 하기 위함
+     */
+    public static RestClient.Builder applyInternalAuth(RestClient.Builder builder, String sharedSecret) {
+        return builder.defaultHeader(InternalAuthHeader.NAME, sharedSecret);
     }
 }
