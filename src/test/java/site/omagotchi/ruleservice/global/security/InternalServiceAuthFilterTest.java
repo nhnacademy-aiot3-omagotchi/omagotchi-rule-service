@@ -19,7 +19,6 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class InternalServiceAuthFilterTest {
 
-    private static final String TOKEN_HEADER = "X-Internal-Token";
     private static final String SHARED_SECRET = "test-shared-secret";
 
     @Mock
@@ -37,7 +36,7 @@ class InternalServiceAuthFilterTest {
     @DisplayName("올바른 시크릿 헤더면 체인을 통과시킨다")
     void passesThroughWithCorrectSecret() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/internal/engines/self");
-        request.addHeader(TOKEN_HEADER, SHARED_SECRET);
+        request.addHeader(InternalAuthHeader.NAME, SHARED_SECRET);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         this.internalServiceAuthFilter.doFilter(request, response, this.filterChain);
@@ -62,7 +61,7 @@ class InternalServiceAuthFilterTest {
     @DisplayName("시크릿 값이 틀리면 403과 함께 체인을 막는다")
     void rejectsWhenSecretMismatches() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/internal/flows/flow-1/start");
-        request.addHeader(TOKEN_HEADER, "wrong-secret");
+        request.addHeader(InternalAuthHeader.NAME, "wrong-secret");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         this.internalServiceAuthFilter.doFilter(request, response, this.filterChain);

@@ -24,7 +24,6 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class InternalServiceAuthFilter extends OncePerRequestFilter {
 
-    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
     private static final String MDC_REQUEST_ID_KEY = "requestId";
 
     private final InternalAuthProperties internalAuthProperties;
@@ -37,7 +36,7 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        String token = request.getHeader(INTERNAL_TOKEN_HEADER);
+        String token = request.getHeader(InternalAuthHeader.NAME);
 
         if (!this.matchesSharedSecret(token)) {
             this.reject(request, response);
