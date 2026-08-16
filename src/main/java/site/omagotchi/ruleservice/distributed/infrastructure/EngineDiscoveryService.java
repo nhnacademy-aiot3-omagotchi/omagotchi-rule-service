@@ -24,7 +24,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Eureka에 등록된 rule-service 피어 목록을 조회하고, 각 피어의 GET /api/v1/internal/engines/self를 직접 폴링해서 ONLINE/OFFLINE을 판정
- * Eureka는 주소 해결에만 사용하고, 생존 판정은 이 폴링 결과로만 함(Eureka의 lease/eviction 미사용)
+ * 생존 판정(= 역할 판정의 근거)은 오직 이 폴링 결과로만 하고, Eureka의 lease/eviction은 승격·강등 결정에 일절 쓰지 않음
+ * Eureka는 (1) 피어 주소 해결과 (2) 이미 OFFLINE으로 판정된 피어를 목록에서 정리할지 판단하는 보조 근거로만 사용
+ * - (2)는 역할 판정에 영향을 주지 않음: judgeRole()이 OFFLINE 피어를 애초에 세지 않기 때문
+ * - Eureka가 여전히 그 피어를 알고 있으면 정리를 보류하므로, Eureka 오판은 "덜 지우는" 안전한 방향으로만 작용
  */
 @Slf4j
 @Component
@@ -37,6 +40,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
     // 테스트에서도 프로덕션과 동일한 값을 참조하도록 패키지 프라이빗으로 노출
     static final long OFFLINE_THRESHOLD_MS = 3_000L;
+
+    // Eureka에서 사라지고 OFFLINE으로 이만큼 지나면 피어 목록에서 제거
+    // Eureka 기본 lease 만료(90초)보다 넉넉히 길게 잡아, 일시적 등록 공백을 스케일다운으로 오해하지 않도록 함
+    static final long PEER_EXPIRY_MS = 300_000L;
 
     private final DiscoveryClient discoveryClient;
     private final RestClient engineInternalRestClient;
@@ -59,6 +66,9 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     // 이 시각 이후로 403조차 못 받고 연결 자체가 실패하면, 인증 문제가 아니라 진짜로 죽은 것으로 판단
     private final Map<String, Long> lastAuthFailedAt = new ConcurrentHashMap<>();
 
+    // peerEngineId -> 마지막으로 Eureka registry에 나타난 시각
+    private final Map<String, Long> lastSeenInRegistryAt = new ConcurrentHashMap<>();
+
     public EngineDiscoveryService(DiscoveryClient discoveryClient,
                                   RestClient engineInternalRestClient,
                                   @Value("${spring.application.name}") String applicationName,
@@ -75,9 +85,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     }
 
     /**
-     * applicationName("rule-service")으로 Eureka에서 인스턴스 목록을 가져와서,
-     * 각 인스턴스의 metadata-map(engine-id, engine-priority)을 읽어 EngineInfo로 변환하고,
-     * engine.id가 자기 자신과 같은 건 걸러냄
+     * 현재까지 파악된 피어 목록의 스냅샷 (자기 자신은 포함하지 않음)
+     * 실제 조회, 생존 판정은 pollPeers()가 주기적으로 수행하고, 이 메서드는 그 결과를 복사해서 돌려주기만 함
      */
     @Override
     public List<EngineInfo> listEngines() {
@@ -86,32 +95,64 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
     @Scheduled(fixedDelay = 1, timeUnit = TimeUnit.SECONDS)
     public void pollPeers() {
+        Optional<List<ServiceInstance>> instances = this.fetchRegistry();
         Set<String> polledThisCycle = new HashSet<>();
 
         // |= (비트 OR) 사용
         // notableChangeDetected = notableChangeDetected || this.pollFallbackPeers(...) 이렇게 쓰면,
         // notableChangeDetected가 이미 true인 순간 뒤 조건은 평가 자체를 건너뛰는 단락 평가가 일어나서 pollFallbackPeers()/judgePresence()가 아예 호출 안 될 수 있음
-        boolean notableChangeDetected = this.pollDiscoveredPeers(polledThisCycle);
+        boolean notableChangeDetected = this.pollDiscoveredPeers(instances.orElse(List.of()), polledThisCycle);
         notableChangeDetected |= this.pollFallbackPeers(polledThisCycle);
         notableChangeDetected |= this.judgePresence();
+
+        // Eureka 응답을 못 받은 주기에는 만료를 건너뜀
+        // (discovery-service 장애를 '피어가 사라졌다'로 오해하면 주소를 잃어버려 fallback 폴링까지 끊김)
+        if (instances.isPresent()) {
+            notableChangeDetected |= this.expireLongGonePeers();
+        } else {
+            this.pauseExpiry(); // 관측 불가 구간에는 카운트다운을 되돌림
+        }
 
         if (notableChangeDetected) {
             this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
         }
     }
 
+    /**
+     * Eureka를 조회하지 못한 구간은 '피어가 사라졌다'라는 증거가 아니므로 만료 카운트다운을 되돌림
+     * 이걸 안 하면 조회 불가 시간이 그대로 만료 시간에 들어가, 장애 복구 직후 첫 조회에서 곧바로 지워짐
+     * 결과적으로 만료는 "Eureka가 계속 응답하는 동안 연속으로 부재가 확인된 시간"으로만 누적됨
+     */
+    private void pauseExpiry() {
+        long now = this.clock.millis();
+        this.knownEngines.keySet().forEach(peerEngineId -> this.lastSeenInRegistryAt.put(peerEngineId, now));
+    }
+
+    // 조회 실패와 '정말로 인스턴스가 없음'을 구분하기 위해 Optional로 감쌈
+    private Optional<List<ServiceInstance>> fetchRegistry() {
+        try {
+            return Optional.of(this.discoveryClient.getInstances(this.applicationName));
+        } catch (Exception e) {
+            log.warn("[EngineDiscoveryService] Eureka 피어 목록 조회 실패 - 이번 주기는 건너뜁니다", e);
+            return Optional.empty();
+        }
+    }
+
     // Eureka가 이번 주기에 돌려준 인스턴스들을 폴링
     // 새 피어 발견 또는 role/presence 변화가 있으면 true
-    private boolean pollDiscoveredPeers(Set<String> polledThisCycle) {
+    private boolean pollDiscoveredPeers(List<ServiceInstance> instances, Set<String> polledThisCycle) {
         boolean notableChangeDetected = false;
 
+        // 반복문 안에서 예외가 새어 나가면 pollPeers()가 통째로 중단되어 judgePresence()까지 건너뛰고, 죽은 피어가 계속 ONLINE으로 남아 failover가 막힘
         try {
-            for (ServiceInstance instance : this.discoveryClient.getInstances(this.applicationName)) {
+            for (ServiceInstance instance : instances) {
                 String peerEngineId = instance.getMetadata().get("engine-id");
 
                 if (Objects.isNull(peerEngineId) || peerEngineId.equals(this.selfEngineId)) {
                     continue;
                 }
+
+                this.lastSeenInRegistryAt.put(peerEngineId, this.clock.millis()); // 만료 판정의 기준점
 
                 // "새 피어 발견"을 별도로 감지해서 항상 알림
                 if (!this.knownEngines.containsKey(peerEngineId)) {
@@ -125,7 +166,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 polledThisCycle.add(peerEngineId);
             }
         } catch (Exception e) {
-            log.warn("Eureka 피어 목록 조회 실패 - 이번 주기는 건너뜁니다", e);
+            log.warn("[EngineDiscoveryService] 피어 폴링 중 예기치 못한 오류 - 이번 주기의 남은 인스턴스는 건너뜁니다", e);
         }
 
         return notableChangeDetected;
@@ -158,6 +199,46 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
         }
 
         return notableChangeDetected;
+    }
+
+    /**
+     * Eureka에서도 사라지고 OFFLINE 상태로 충분히 오래 지난 피어를 목록에서 제거
+     * (의도적) 스케일다운(2대 -> 1대) 후에도 죽은 주소를 매초 폴링하고 topology가 영구 DEGRADED로 남는 것을 방지
+     * 호출 자체가 "이번 주기에 Eureka 조회가 성공했을 때"로 제한되므로, discovery-service 장애로는 만료되지 않음
+     */
+    private boolean expireLongGonePeers() {
+        long now = this.clock.millis();
+        boolean removedAny = false;
+
+        for (Map.Entry<String, EngineInfo> entry : this.knownEngines.entrySet()) {
+            String peerEngineId = entry.getKey();
+
+            if (entry.getValue().presenceStatus() != PresenceStatus.OFFLINE) {
+                continue; // 살아있거나(ONLINE) 인증만 막힌(AUTH_FAILED) 피어는 제거 대상이 아님
+            }
+
+            long lastInRegistry = this.lastSeenInRegistryAt.getOrDefault(peerEngineId, now);
+
+            if (now - lastInRegistry < PEER_EXPIRY_MS) {
+                continue;
+            }
+
+            log.warn("[{}] Eureka에서 사라지고 OFFLINE으로 {}ms 이상 지속 - 피어 목록에서 제거", peerEngineId, PEER_EXPIRY_MS);
+            this.removePeer(peerEngineId);
+            removedAny = true;
+        }
+
+        return removedAny;
+    }
+
+    // 피어가 딸린 추적 상태를 한꺼번에 정리 (남겨두면 같은 id로 재등장할 때 낡은 값이 판정에 섞임)
+    private void removePeer(String peerEngineId) {
+        this.knownEngines.remove(peerEngineId);
+        this.lastPolledSuccessAt.remove(peerEngineId);
+        this.lastAuthFailedAt.remove(peerEngineId);
+        this.lastSeenInRegistryAt.remove(peerEngineId);
+        this.authFailureWarned.remove(peerEngineId);
+        this.identityMismatchWarned.remove(peerEngineId);
     }
 
     private boolean pollOne(String peerEngineId, ServiceInstance instance) {

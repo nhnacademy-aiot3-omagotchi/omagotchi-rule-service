@@ -15,6 +15,7 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.distributed.application.MutableClock;
@@ -37,6 +38,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static site.omagotchi.ruleservice.distributed.infrastructure.EngineDiscoveryService.OFFLINE_THRESHOLD_MS;
+import static site.omagotchi.ruleservice.distributed.infrastructure.EngineDiscoveryService.PEER_EXPIRY_MS;
 
 class EngineDiscoveryServiceTest {
 
@@ -478,5 +480,97 @@ class EngineDiscoveryServiceTest {
                 .filter(event -> event.getFormattedMessage().contains("Eureka 메타데이터와 다름"))
                 .count();
         assertThat(mismatchCount).isEqualTo(1); // 반복돼도 경고는 한 번만
+    }
+
+    @Test
+    @DisplayName("Eureka에서 사라지고 OFFLINE으로 충분히 오래 지난 피어는 목록에서 제거된다")
+    void expiresPeerLongGoneFromRegistry() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance))
+                .thenReturn(List.of()); // 의도적 스케일다운 - registry에서 사라짐
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(ExpectedCount.manyTimes(), requestTo(PEER_URL))
+                .andRespond(withServerError()); // 이후 폴백 폴링은 계속 실패
+
+        this.engineDiscoveryService.pollPeers(); // 발견 - ONLINE
+
+        this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS + 1));
+        this.engineDiscoveryService.pollPeers(); // OFFLINE 판정
+
+        assertThat(this.engineDiscoveryService.listEngines()).hasSize(1); // 아직은 목록에 남아 있음
+
+        this.clock.advance(Duration.ofMillis(PEER_EXPIRY_MS));
+        this.engineDiscoveryService.pollPeers(); // 만료
+
+        assertThat(this.engineDiscoveryService.listEngines()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Eureka 조회 자체가 실패하는 동안에는 피어를 만료시키지 않는다")
+    void doesNotExpireWhileRegistryFetchFails() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance))
+                .thenThrow(new IllegalStateException("discovery-service 장애")); // 이후 계속 실패
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(ExpectedCount.manyTimes(), requestTo(PEER_URL))
+                .andRespond(withServerError());
+
+        this.engineDiscoveryService.pollPeers(); // 발견 - ONLINE
+
+        this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS + 1));
+        this.engineDiscoveryService.pollPeers(); // OFFLINE 판정
+
+        this.clock.advance(Duration.ofMillis(PEER_EXPIRY_MS));
+        this.engineDiscoveryService.pollPeers();
+
+        // discovery-service 장애를 스케일다운으로 오해하면 주소를 잃어버려 폴백 폴링까지 끊김
+        assertThat(this.engineDiscoveryService.listEngines()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Eureka 장애가 길어져도 그 시간은 만료에 산입되지 않고, 복구 후 다시 처음부터 센다")
+    void doesNotCountRegistryOutageTowardExpiry() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance))
+                .thenThrow(new IllegalStateException("discovery-service 장애"))
+                .thenReturn(List.of()); // 복구 - 피어는 정말로 사라진 상태
+
+        this.restServiceServer.expect(requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+        this.restServiceServer.expect(ExpectedCount.manyTimes(), requestTo(PEER_URL))
+                .andRespond(withServerError());
+
+        this.engineDiscoveryService.pollPeers(); // 발견 - ONLINE
+
+        this.clock.advance(Duration.ofMillis(OFFLINE_THRESHOLD_MS + PEER_EXPIRY_MS));
+        this.engineDiscoveryService.pollPeers(); // Eureka 장애 구간 - 시간만 크게 흐름
+
+        this.engineDiscoveryService.pollPeers(); // 복구 직후 첫 조회
+
+        // 장애 구간이 만료에 산입됐다면 여기서 이미 지워졌을 것
+        assertThat(this.engineDiscoveryService.listEngines()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("registry에서 사라져도 폴백 폴링으로 ONLINE을 유지 중이면 만료시키지 않는다")
+    void doesNotExpireStillOnlinePeer() {
+        when(this.discoveryClient.getInstances("rule-service"))
+                .thenReturn(List.of(this.peerInstance))
+                .thenReturn(List.of());
+
+        this.restServiceServer.expect(ExpectedCount.manyTimes(), requestTo(PEER_URL))
+                .andRespond(withSuccess(PEER_RESPONSE, MediaType.APPLICATION_JSON));
+
+        this.engineDiscoveryService.pollPeers(); // 발견 - ONLINE
+
+        this.clock.advance(Duration.ofMillis(PEER_EXPIRY_MS + 1));
+        this.engineDiscoveryService.pollPeers(); // 폴백 폴링은 계속 성공 -> ONLINE 유지
+
+        assertThat(this.engineDiscoveryService.listEngines()).hasSize(1);
+        assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.ONLINE);
     }
 }
