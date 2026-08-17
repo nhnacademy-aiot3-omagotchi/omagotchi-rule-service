@@ -112,6 +112,39 @@ class TwoEngineDualActiveSimulationTest {
         assertThat(this.engineB.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
     }
 
+    // 한계를 증명하는 테스트
+    @Test
+    @DisplayName("한계 증명: A-B 내부 HTTP만 끊기고 각자 프로세스는 살아있는 비대칭 단절에서는, 자가 치유가 닿을 방법이 없어 둘 다 ACTIVE로 영구히 남는다")
+    void asymmetricPartitionCanLeaveBothActivePermanently() {
+        // 1. 정상 기동 - A=ACTIVE, B=STANDBY 확립
+        this.engineA.scheduleInitialEvaluation();
+        this.engineB.scheduleInitialEvaluation();
+        this.scheduler.advanceTo(this.clock, this.clock.instant().plusMillis(INITIAL_WAIT_MS));
+        assertThat(this.engineA.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        assertThat(this.engineB.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        // 2. A<->B 내부 HTTP만 단절 (MQTT 등 다른 경로는 살아있다고 가정 - 이 테스트의 시뮬레이션 대상 아님)
+        // A는 애초에 자기가 최상위 우선순위라 B를 보고 역할을 정하지 않으므로, A 쪽은 아무것도 안 건드려도 그대로 ACTIVE
+        this.directoryOfB.setPresenceStatus(PresenceStatus.OFFLINE); // B가 A에게 못 닿음
+        this.engineB.onPresenceChanged(); // failover 후보 - grace 예약
+
+        this.scheduler.advanceTo(this.clock, this.clock.instant().plusMillis(GRACE_MS));
+
+        // B는 A가 안 보이니 정상적인 failover 절차를 밟아 승격 - 이 판단 자체는 올바름(A가 진짜 죽었을 수도 있으니 구분 불가)
+        assertThat(this.engineB.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        // A는 실제로는 살아있고, 자기 판정에 B의 상태가 관여하지 않아 계속 ACTIVE
+        assertThat(this.engineA.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        // 3. 시간이 아무리 지나고 reconcile이 여러 번 돌아도 회복되지 않음
+        // 자가 치유(higherPriorityPeerReportsActive)는 "상대를 다시 볼 수 있게 됨"이 전제인데, HTTP가 안 뚫리는 한 그 전제 자체가 성립하지 않음
+        this.engineA.reconcile();
+        this.engineB.reconcile();
+        this.scheduler.advanceTo(this.clock, this.clock.instant().plus(Duration.ofMinutes(10)));
+
+        assertThat(this.engineA.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        assertThat(this.engineB.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 여전히 둘 다 ACTIVE - 이 설계의 알려진 한계
+    }
+
     // 서로의 실제 currentRole을 실시간으로 비추는 가짜 EngineDirectoryPort
     private static class LiveMirrorPort implements EngineDirectoryPort {
         private final String peerEngineId;

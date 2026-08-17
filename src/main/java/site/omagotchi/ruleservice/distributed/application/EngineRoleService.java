@@ -26,6 +26,12 @@ import java.util.concurrent.TimeUnit;
  * 정적 우선순위 규칙으로 ACTIVE/STANDBY 역할을 판정하고, Activatable 노드에 activate()/deactivate() 지시
  * 규칙: 나보다 우선순위가 높은(priority 값이 낮은) 피어가 하나라도 ONLINE이면 STANDBY, 아니면 ACTIVE
  * 기동 초기 대기(15s) 동안은 역할을 결정하지 않음 - 기동 순서와 무관하게 동일한 결과를 보장하기 위함
+ * <p>
+ * exactly-one ACTIVE 보장 범위: 프로세스 장애(크래시, 재기동)와 대칭적 네트워크 단절(피어와 완전히 끊김)까지는 보장함
+ * 비대칭 단절(예: 내부 HTTP 폴링만 끊기고 MQTT 구독은 살아있는 경우)은 이 메커니즘만으로 막을 수 없음 -
+ * A는 자기가 살아있다고 여겨 계속 ACTIVE를 유지하고, B는 A를 OFFLINE으로 오판해 승격하여 둘 다 ACTIVE가 될 수 있음
+ * 이 경우를 완전히 막으려면 두 엔진 밖의 중재점(분산 lease + fencing token, 브로커의 단일 소유권 등)이 필요하며 현재 범위 밖
+ * (TwoEngineDualActiveSimulationTest의 비대칭 단절 테스트, 하위 파이프라인의 멱등성 처리와 함께 운영 계약으로 다룸)
  */
 @Service
 @Slf4j
