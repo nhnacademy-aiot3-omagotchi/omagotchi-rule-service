@@ -196,8 +196,8 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate(); // failover 후보 - grace 예약
 
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
-                peer("engine-0", 1, PresenceStatus.ONLINE)
-        )); // grace 도중 복귀
+                peer("engine-0", 1, PresenceStatus.ONLINE, EngineRole.ACTIVE)
+        )); // grace 도중 복귀 (계속 액티브였던 걸로 확인됨 - 일시적 네트웍 단절 시나리오)
 
         this.clock.advance(Duration.ofMillis(GRACE_MS));
         this.runLastScheduledTask(); // confirmFailover() 재계산 시점엔 이미 복귀함 -> 스탠바이 유지
@@ -207,7 +207,7 @@ class EngineRoleServiceTest {
     }
 
     @Test
-    @DisplayName("이미 ACTIVE인 상태에서 상위 피어가 복귀해도 1번만으로는 전환하지 않고, 연속 2번째 확인에 STANDBY로 전환한다")
+    @DisplayName("이미 ACTIVE인 상태에서 상위 피어가 AUTH_FAILED가 되어도 1번만으로는 전환하지 않고, 연속 2번째 확인에 STANDBY로 전환한다")
     void fallbackHysteresisRequiresTwoConsecutiveConfirmations() {
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
 
@@ -218,8 +218,8 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
 
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
-                peer("engine-0", 1, PresenceStatus.ONLINE)
-        )); // 상위 피어 복귀 - 1번째 확인
+                peer("engine-0", 1, PresenceStatus.AUTH_FAILED)
+        )); // 상위 피어가 AUTH_FAILED로 나타남 - 1번째 확인 (ACTIVE 보고가 아니므로 자가 치유 대상이 아니라 히스테리시스를 그대로 거침)
         engineRoleService.reevaluate();
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 안 바뀜
@@ -242,7 +242,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate(); // 액티브 (현재 내가 최상위)
 
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
-                peer("engine-0", 1, PresenceStatus.ONLINE) // 상위 피어 등장
+                peer("engine-0", 1, PresenceStatus.AUTH_FAILED) // 상위 피어가 AUTH_FAILED로 등장
         ));
         engineRoleService.reevaluate(); // 1번째 확인
 
@@ -251,7 +251,7 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate(); // judged == currentRole(ACTIVE) -> 카운터 리셋
 
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
-                peer("engine-0", 1, PresenceStatus.ONLINE) // 다시 상위 피어 등장
+                peer("engine-0", 1, PresenceStatus.AUTH_FAILED) // 다시 AUTH_FAILED로 등장
         ));
         engineRoleService.reevaluate(); // 리셋됐으므로 다시 1번째 확인일 뿐
 
@@ -491,8 +491,8 @@ class EngineRoleServiceTest {
         engineRoleService.reevaluate(); // 최초 배정 - ACTIVE
 
         when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
-                peer("engine-0", 1, PresenceStatus.ONLINE)
-        )); // 상위 피어 복귀 - 1번째 확인 (시각 T)
+                peer("engine-0", 1, PresenceStatus.AUTH_FAILED)
+        )); // 상위 피어가 AUTH_FAILED로 나타남 - 1번째 확인 (시각 T)
 
         engineRoleService.reevaluate();
         engineRoleService.reevaluate(); // 같은 시각에 곧바로 2번째 호출 (예: 3대 이상 환경에서 이벤트가 몰리는 상황 재현)
@@ -507,6 +507,51 @@ class EngineRoleServiceTest {
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
         verify(this.flowManager).applyActivationState(false);
+    }
+
+    @Test
+    @DisplayName("상위 피어가 ONLINE이어도 아직 본인의 role을 못 정했다면(role=null), 이미 ACTIVE인 나는 강등되지 않는다")
+    void doesNotDemoteWhenHigherPriorityPeerOnlineButRoleUnknown() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE (상위 피어 없음)
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+
+        // 상위 엔진이 재기동해서 연결은 되는데(ONLINE) 아직 자기 역할을 안 정함(role=null) - 자기 기동 후 15초 대기 중인 상황
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE, null)
+        ));
+        engineRoleService.reevaluate();
+
+        // 예전엔 여기서 바로 STANDBY 후보가 됐지만, 이제는 상대가 실제로 ACTIVE라고 말할 때까지 그대로 유지
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(this.flowManager, never()).applyActivationState(false);
+
+        // 상위 엔진이 마침내 ACTIVE를 선언 - 그제서야 failback 후보가 됨
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE, EngineRole.ACTIVE)
+        ));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+    }
+
+    @Test
+    @DisplayName("콜드부트(둘 다 첫 판정)에서 상위 피어가 ONLINE인데 아직 role을 못 정했다면, 예전처럼 안전하게 STANDBY로 시작한다")
+    void fallsBackToOldRuleOnColdBootWhenPeerRoleUnknown() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE, null) // 상대도 아직 첫 판정 전 (동시 기동)
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정
+
+        // 나도 처음, 상대도 처음이라 서로 뭘 할지 모름 - 안전하게 양보
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
     }
 
     /**

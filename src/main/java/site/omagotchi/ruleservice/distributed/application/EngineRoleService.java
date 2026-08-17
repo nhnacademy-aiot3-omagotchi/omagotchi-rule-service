@@ -24,7 +24,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 정적 우선순위 규칙으로 ACTIVE/STANDBY 역할을 판정하고, Activatable 노드에 activate()/deactivate() 지시
- * 규칙: 나보다 우선순위가 높은(priority 값이 낮은) 피어가 하나라도 ONLINE이면 STANDBY, 아니면 ACTIVE
+ * 규칙: 나보다 우선순위가 높은 피어가 스스로 ACTIVE라고 보고하면 STANDBY, 그 피어가 AUTH_FAILED면 승격 보류, 아니면 ACTIVE
+ * 상위 피어가 ONLINE인데 아직 자기 역할을 못 정한 경우(재기동 직후 등)는 그 자체로 양보하지 않음
+ * 단, 나도 아직 첫 판정 전(콜드부트)이면서 상대도 못 정했다면 안전하게 기존 우선순위 규칙(ONLINE이면 양보)으로 폴백
  * 기동 초기 대기(15s) 동안은 역할을 결정하지 않음 - 기동 순서와 무관하게 동일한 결과를 보장하기 위함
  * <p>
  * exactly-one ACTIVE 보장 범위: 프로세스 장애(크래시, 재기동)와 대칭적 네트워크 단절(피어와 완전히 끊김)까지는 보장함
@@ -225,11 +227,15 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
                 .filter(engineInfo -> isHigherPriority(engineInfo, myPriority, myId))
                 .toList();
 
-        boolean higherPriorityOnline = higherPriorityPeers.stream()
-                .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE);
+        // 상위 피어가 스스로 액티브라고 보고 -> 확실한 신호 -> 즉시 양보
+        // (리팩터링 전에는 온라인이기만 하면 양보했음.
+        // 그렇게 하면 상위 엔진이 재기동 중이라 자기 역할을 아직 못 정했을 뿐인데도 미리 강등해버려서 아무도 액티브가 아닌 공백이 생김
+        // - 상위가 실제로 액티브를 선언할 때까지 기다림)
+        boolean higherPriorityReportsActive = higherPriorityPeers.stream()
+                .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE
+                        && engineInfo.engineRole() == EngineRole.ACTIVE);
 
-        // 상위 피어가 살아있고, STANDBY로 있는 것이 옳음
-        if (higherPriorityOnline) {
+        if (higherPriorityReportsActive) {
             return EngineRole.STANDBY;
         }
 
@@ -242,10 +248,24 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             return EngineRole.STANDBY;
         }
 
-        // 최초 판정인데 낮은 우선순위가 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작
-        // (최초 배정은 grace 없이 즉시 적용되므로, 여기서 안 막으면 상대가 강등할 때까지 이중 ACTIVE 구간이 생김)
-        // OFFLINE 피어에 남아있는 옛 engineRole 잔상에 낚이지 않도록 presenceStatus == ONLINE도 같이 확인
+        // 아래 두 가드는 전부 '나의 첫 판정(콜드부트)'에서만 의미가 있음
+        // - 한 번 역할이 정해진 뒤에는 상위 피어의 명시적 액티브 보고로만 판단하므로, 상대가 온라인인데 role만 모른다고 흔들리지 않음
         if (Objects.isNull(this.currentRole)) {
+            // 상위 피어가 연결은 되는데 아직 자기 역할을 못 정한 경우 (재기동 후 15초 대기중 등)
+            // - 그 자체는 상위 피어가 액티브란 증거는 아니지만, 나도 처음 판정하는 중이라 상대가 뭘 할지 전혀 모름
+            // 이 상황에서 내가 먼저 액티브를 선언해버리면, 상대도 똑같이 몰라서 액티브를 선언할 수 있어서 이중액티브가 됨
+            // 따라서, 진짜 애매한 콜드부트(둘 다 첫 판정) 동시 기동 상황에서만 안전하게 기존 우선순위 규칙(온라인이면 양보)으로 폴백
+            boolean higherPriorityOnlineWithUnknownRole = higherPriorityPeers.stream()
+                    .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE
+                            && Objects.isNull(engineInfo.engineRole()));
+
+            if (higherPriorityOnlineWithUnknownRole) {
+                return EngineRole.STANDBY;
+            }
+
+            // 최초 판정인데 낮은 우선순위가 피어가 이미 ONLINE+ACTIVE로 활동 중이면, 곧바로 뺏지 않고 STANDBY로 시작
+            // (최초 배정은 grace 없이 즉시 적용되므로, 여기서 안 막으면 상대가 강등할 때까지 이중 ACTIVE 구간이 생김)
+            // OFFLINE 피어에 남아있는 옛 engineRole 잔상에 낚이지 않도록 presenceStatus == ONLINE도 같이 확인
             boolean onlinePeerAlreadyActive = peers.stream()
                     .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE
                             && engineInfo.engineRole() == EngineRole.ACTIVE);
