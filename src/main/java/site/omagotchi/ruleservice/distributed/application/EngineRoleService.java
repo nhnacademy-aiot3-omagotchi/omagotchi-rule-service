@@ -16,6 +16,7 @@ import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -41,8 +42,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     private static final long RECONCILE_INTERVAL_SECONDS = 30;
 
     private static final long ACTIVATION_RETRY_DELAY_MS = 3_000L; // 실패 시 한 번 재시도 할 때 사용
-    private static final int FAILBACK_CONFIRMATIONS = 2;
-    private static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;
+    static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;
 
     private final EngineDirectoryPort engineDirectoryPort;
     private final EngineProperties engineProperties;
@@ -55,8 +55,8 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     @Getter
     private volatile EngineRole currentRole;
 
-    // failback 히스테리시스 - 연속으로 STANDBY 판정된 횟수
-    private int standbyConfirmCount = 0;
+    // fallback 후보로 처음 감지된 시각 - null이면 후보 아님 (경과시간 기준 히스테리시스, 호출 횟수 아님)
+    private Instant standbyCandidateSince;
 
     public EngineRoleService(EngineDirectoryPort engineDirectoryPort,
                              EngineProperties engineProperties,
@@ -92,11 +92,11 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     /**
      * 정기 자기 치유 - 두 가지를 함께 수행
      * 1) 역할 재판정: 이 클래스는 onPresenceChanged() 알림에만 의존해 재판정하는데, 피어 상태가 그대로면 알림이 오지 않음
-     *    예를 들어 상위 엔진이 재기동하면서 "이미 활동 중인 하위 피어에게 양보"(judgeRole의 최초 배정 가드)로 STANDBY로 시작하면,
-     *    그 뒤 피어에 아무 변화가 없어 알림이 끊기고 우선순위가 역전된 채 영영 고착됨
-     *    -> 주기적으로 판정을 다시 돌려서 엣지 트리거가 흘린 상황을 흡수함 (판정이 그대로면 아무 일도 하지 않음)
+     * 예를 들어 상위 엔진이 재기동하면서 "이미 활동 중인 하위 피어에게 양보"(judgeRole의 최초 배정 가드)로 STANDBY로 시작하면,
+     * 그 뒤 피어에 아무 변화가 없어 알림이 끊기고 우선순위가 역전된 채 영영 고착됨
+     * -> 주기적으로 판정을 다시 돌려서 엣지 트리거가 흘린 상황을 흡수함 (판정이 그대로면 아무 일도 하지 않음)
      * 2) 노드 게이트 재적용: FlowManager.applyCurrentActivationState()의 isSelfActive() 조회와 이 클래스의 역할 전환이
-     *    락 없이 교차하면 게이트가 실제 역할과 어긋난 채 남을 수 있음
+     * 락 없이 교차하면 게이트가 실제 역할과 어긋난 채 남을 수 있음
      * synchronized 필수 - 없으면 읽은 낡은 currentRole을 진행 중인 전환 뒤에 뒤늦게 밀어 넣어 방금 끝난 전환을 되돌림
      * flowManager.applyActivationState()는 상대 엔진에게 네트워크 호출을 하지 않는 로컬 동작이라 락을 쥔 채 호출해도 순환 대기 없음
      * activate/deactivate 전부 멱등하므로 이미 올바른 상태인 노드에는 비용이 거의 없음
@@ -127,7 +127,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         if (this.currentRole == EngineRole.ACTIVE && this.higherPriorityPeerReportsActive()) {
             log.warn("[EngineRoleService] 상위 우선순위 피어도 ACTIVE를 보고함 (이중 ACTIVE 감지) - 즉시 STANDBY로 강등");
 
-            this.standbyConfirmCount = 0;
+            this.standbyCandidateSince = null;
             this.applyRoleChange(EngineRole.STANDBY);
 
             return;
@@ -137,7 +137,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
 
         // 판정이 지금 롤이랑 같으면 할 것 없음 (기존과 동일)
         if (judged == this.currentRole) {
-            this.standbyConfirmCount = 0; // 판정이 안정됐으니 히스테리시스 카운터도 초기화
+            this.standbyCandidateSince = null; // 판정이 안정됐으니 히스테리시스 카운터도 초기화
             return; // 멱등성(실제 전환일 때만 게이트를 건드림)
         }
 
@@ -156,18 +156,26 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             return; // 여기서 끝 - 아직 currentRole도 안 바꿨고, activate()도 호출 안 함
         }
 
-        // failback 후보(ACTIVE -> STANDBY) - 연속 2회 확인되어야 실제 전환 (플래핑 방지)
-        this.standbyConfirmCount++;
+        // failback 후보(ACTIVE -> STANDBY) - 최초 감지 이후 FAILBACK_CONFIRM_INTERVAL_MS가 지나야 실제 전환 (플래핑 방지)
+        // 카운터가 아니라 경과 시간으로 판단 - 그래야 reevaluate()가 짧은 간격으로 여러 번 몰려도(피어 3대 이상 등) 실제로 5초를 기다림
+        Instant now = Instant.now(this.clock);
 
-        if (this.standbyConfirmCount < FAILBACK_CONFIRMATIONS) {
-            log.debug("failback 후보 감지 ({}/{}) - {}ms 뒤 재확인 예약", this.standbyConfirmCount, FAILBACK_CONFIRMATIONS, FAILBACK_CONFIRM_INTERVAL_MS);
-            this.taskScheduler.schedule(this::reevaluate, Instant.now(this.clock).plusMillis(FAILBACK_CONFIRM_INTERVAL_MS));
-
-            return; // 아직 1번째면 여기서 끝 - 아무것도 안 바뀜
+        if (Objects.isNull(this.standbyCandidateSince)) {
+            this.standbyCandidateSince = now;
         }
 
-        this.standbyConfirmCount = 0;
-        this.applyRoleChange(judged); // 2번째면 진짜로 STANDBY로 전환
+        long elapsedMs = Duration.between(this.standbyCandidateSince, now).toMillis();
+
+        if (elapsedMs < FAILBACK_CONFIRM_INTERVAL_MS) {
+            long remainingMs = FAILBACK_CONFIRM_INTERVAL_MS - elapsedMs;
+            log.debug("[EngineRoleService] failback 후보 감지 (경과 {}ms/{}ms) - {}ms 뒤 재확인 예약", elapsedMs, FAILBACK_CONFIRM_INTERVAL_MS, remainingMs);
+            this.taskScheduler.schedule(this::reevaluate, now.plusMillis(remainingMs));
+
+            return; // 아직 시간이 안 지났으면 여기서 끝 - 아무것도 안 바뀜
+        }
+
+        this.standbyCandidateSince = null;
+        this.applyRoleChange(judged); // 시간이 다 지났으면 진짜로 STANDBY로 전환
     }
 
     private boolean higherPriorityPeerReportsActive() {

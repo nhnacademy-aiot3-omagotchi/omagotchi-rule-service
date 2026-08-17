@@ -17,8 +17,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
-import static site.omagotchi.ruleservice.distributed.application.EngineRoleService.GRACE_MS;
-import static site.omagotchi.ruleservice.distributed.application.EngineRoleService.INITIAL_WAIT_MS;
+import static site.omagotchi.ruleservice.distributed.application.EngineRoleService.*;
 
 class EngineRoleServiceTest {
 
@@ -226,7 +225,7 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 안 바뀜
         verify(this.flowManager, never()).applyActivationState(false);
 
-        this.clock.advance(Duration.ofMillis(GRACE_MS));
+        this.clock.advance(Duration.ofMillis(FAILBACK_CONFIRM_INTERVAL_MS));
         this.runLastScheduledTask(); // 2번째 확인
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
@@ -318,7 +317,7 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 아직 히스테리시스 대기중이라 즉시는 안 바뀜
         verify(this.flowManager, never()).applyActivationState(false);
 
-        this.clock.advance(Duration.ofMillis(GRACE_MS));
+        this.clock.advance(Duration.ofMillis(FAILBACK_CONFIRM_INTERVAL_MS));
         this.runLastScheduledTask(); // 재확인 - 여전히 AUTH_FAILED
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
@@ -480,6 +479,34 @@ class EngineRoleServiceTest {
         engineRoleService.reconcile();
 
         verify(this.flowManager, times(2)).applyActivationState(true); // 최초 배정 1회 + reconcile 1회
+    }
+
+    @Test
+    @DisplayName("failback 후보로 감지된 이후 짧은 간격으로 reevaluate가 여러 번 몰려도, 실제 FAILBACK_CONFIRM_INTERVAL_MS가 지나기 전엔 전환하지 않는다")
+    void failbackHysteresisRequiresElapsedTimeNotJustCallCount() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE
+
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 1, PresenceStatus.ONLINE)
+        )); // 상위 피어 복귀 - 1번째 확인 (시각 T)
+
+        engineRoleService.reevaluate();
+        engineRoleService.reevaluate(); // 같은 시각에 곧바로 2번째 호출 (예: 3대 이상 환경에서 이벤트가 몰리는 상황 재현)
+        engineRoleService.reevaluate(); // 3번째도 곧바로
+
+        // 호출 횟수는 이미 3번이지만, 시간이 전혀 안 지났으므로 아직 전환되면 안 됨
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+        verify(this.flowManager, never()).applyActivationState(false);
+
+        this.clock.advance(Duration.ofMillis(FAILBACK_CONFIRM_INTERVAL_MS));
+        this.runLastScheduledTask(); // 실제로 5초가 지난 뒤 재확인
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.flowManager).applyActivationState(false);
     }
 
     /**
