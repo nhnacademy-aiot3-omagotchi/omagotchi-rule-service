@@ -53,6 +53,9 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
     private final Clock clock;
     private final Set<String> authFailureWarned = ConcurrentHashMap.newKeySet(); // 동시성 문제 X
 
+    // ENGINE_ID 중복 경고를 매초 반복해서 찍지 않기 위한 플래그
+    private volatile boolean duplicateSelfIdWarned = false;
+
     // 신원 불일치 경고를 피어당 한 번만 남기기 위한 셋 (1초마다 반복 로깅 방지)
     private final Set<String> identityMismatchWarned = ConcurrentHashMap.newKeySet();
 
@@ -105,9 +108,10 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
         notableChangeDetected |= this.pollFallbackPeers(polledThisCycle);
         notableChangeDetected |= this.judgePresence();
 
-        // Eureka 응답을 못 받은 주기에는 만료를 건너뜀
-        // (discovery-service 장애를 '피어가 사라졌다'로 오해하면 주소를 잃어버려 fallback 폴링까지 끊김)
+        // Eureka 응답을 못 받은 주기에는 만료도, 종복ID 검사도 건너뜀
+        // (조회 실패를 '지금은 중복이 아니다'로 오해하면 플래그가 잘못 리셋되어, 복구 후 여전히 같은 중복인데도 재경고가 나감)
         if (instances.isPresent()) {
+            this.checkForDuplicateSelfId(instances.get());
             notableChangeDetected |= this.expireLongGonePeers();
         } else {
             this.pauseExpiry(); // 관측 불가 구간에는 카운트다운을 되돌림
@@ -115,6 +119,27 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
 
         if (notableChangeDetected) {
             this.enginePresenceListeners.forEach(EnginePresenceListener::onPresenceChanged);
+        }
+    }
+
+    // ENGINE_ID가 나와 같은 등록이 2개 이상이면(예: compose 파일 복붙 실수)
+    // pollDiscoveredPeers()의 자기 자신 필터가 둘 다 '나 자신'으로 오인해 조용히 걸러버리고,
+    // 결과적으로 양쪽 다 '피어가 없다'라고 착각해 둘 다 ACTIVE가 될 수 있음
+    // Eureka가 자기 자신의 등록도 함꼐 돌려준다는 전제 - register-with-eureka=false면 내 등록이 목록에 없어 이 검사는 동작하지 않음
+    // (그 설정에서는 피어끼리 서로를 발견할 수 없어 이중화 자체가 성립하지 않으므로 문제는 X)
+    private void checkForDuplicateSelfId(List<ServiceInstance> instances) {
+        long selfIdCount = instances.stream()
+                .filter(instance -> this.selfEngineId.equals(instance.getMetadata().get("engine-id")))
+                .count();
+
+        if(selfIdCount > 1) {
+            if(!this.duplicateSelfIdWarned) {
+                log.error("[EngineDiscoveryService] ENGINE_ID '{}'로 등록된 인스턴스가 {}개 발견됨 - 설정 오류로 서로를 자기 자신으로 오인해 이중화가 깨질 수 있습니다. 각 엔진의 ENGINE_ID가 고유한지 확인하세요.",
+                        this.selfEngineId, selfIdCount);
+                this.duplicateSelfIdWarned = true;
+            }
+        } else {
+            this.duplicateSelfIdWarned = false; // 복구되면 다음 재발 때 다시 경고할 수 있도록
         }
     }
 

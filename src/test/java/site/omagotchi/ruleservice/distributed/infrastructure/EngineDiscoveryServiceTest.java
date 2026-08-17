@@ -573,4 +573,49 @@ class EngineDiscoveryServiceTest {
         assertThat(this.engineDiscoveryService.listEngines()).hasSize(1);
         assertThat(this.engineDiscoveryService.listEngines().getFirst().presenceStatus()).isEqualTo(PresenceStatus.ONLINE);
     }
+
+    @Test
+    @DisplayName("ENGINE_ID가 같은 인스턴스가 2개 이상 등록되면 ERROR 로그를 남긴다")
+    void warnsWhenDuplicateSelfEngineIdRegistered() {
+        // Eureka는 자기 자신의 등록도 함께 돌려주므로, 진짜 중복 상황은 "내 등록 + 같은 ID로 뜬 다른 엔진" = 2개
+        ServiceInstance selfRegistration = new DefaultServiceInstance(
+                "self-1", "rule-service", "my-host", 8081, false,
+                Map.of("engine-id", "engine-a", "engine-priority", "1")
+        );
+        ServiceInstance duplicated = new DefaultServiceInstance(
+                "dup-1", "rule-service", "other-host", 8081, false,
+                Map.of("engine-id", "engine-a", "engine-priority", "1") // ENGINE_ID 복붙 실수
+        );
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(selfRegistration, duplicated));
+
+        this.engineDiscoveryService.pollPeers();
+
+        long errorCount = this.appender.list.stream()
+                .filter(event -> event.getFormattedMessage().contains("ENGINE_ID") && event.getFormattedMessage().contains("발견됨"))
+                .count();
+        assertThat(errorCount).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ENGINE_ID 중복이 계속돼도 경고 로그는 한 번만 남긴다")
+    void warnsOnceForPersistentDuplicateSelfEngineId() {
+        ServiceInstance selfRegistration = new DefaultServiceInstance(
+                "self-1", "rule-service", "my-host", 8081, false,
+                Map.of("engine-id", "engine-a", "engine-priority", "1")
+        );
+        ServiceInstance duplicated = new DefaultServiceInstance(
+                "dup-1", "rule-service", "other-host", 8081, false,
+                Map.of("engine-id", "engine-a", "engine-priority", "1")
+        );
+        when(this.discoveryClient.getInstances("rule-service")).thenReturn(List.of(selfRegistration, duplicated));
+
+        this.engineDiscoveryService.pollPeers();
+        this.engineDiscoveryService.pollPeers();
+        this.engineDiscoveryService.pollPeers();
+
+        long errorCount = this.appender.list.stream()
+                .filter(event -> event.getFormattedMessage().contains("ENGINE_ID") && event.getFormattedMessage().contains("발견됨"))
+                .count();
+        assertThat(errorCount).isEqualTo(1);
+    }
 }
