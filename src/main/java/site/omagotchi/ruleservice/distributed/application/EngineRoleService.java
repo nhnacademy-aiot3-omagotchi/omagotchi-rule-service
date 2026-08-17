@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
 import site.omagotchi.ruleservice.distributed.application.port.EnginePresenceListener;
@@ -18,6 +19,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 정적 우선순위 규칙으로 ACTIVE/STANDBY 역할을 판정하고, Activatable 노드에 activate()/deactivate() 지시
@@ -36,6 +38,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     // 테스트에서도 프로덕션과 동일한 값을 참조하도록 패키지 프라이빗으로
     static final long INITIAL_WAIT_MS = 15_000L;
     static final long GRACE_MS = 1_500L;
+    private static final long RECONCILE_INTERVAL_SECONDS = 30;
 
     private static final long ACTIVATION_RETRY_DELAY_MS = 3_000L; // 실패 시 한 번 재시도 할 때 사용
     private static final int FAILBACK_CONFIRMATIONS = 2;
@@ -84,6 +87,22 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     @Override
     public void onPresenceChanged() {
         this.reevaluate();
+    }
+
+    /**
+     * 정기 자기 치유
+     * FlowManager.applyCurrentActivationState()가 isSelfActive()를 조회하고 노드에 적용하는 구간과
+     * reevaluate()의 역할 전환 사이에는 락이 없어서, 아주 좁은 확률로 둘이 교차하면 노드 게이트가 실제 역할과 어긋난 채 남을 수 있음
+     * (예: 플로우 스타트 도중 조회 직후 역할이 바뀌는 경우)
+     * synchronized 필수 - 없으면 이 메서드가 읽은 낡은 currentRole을 진행 중인 전환 뒤에 뒤늦게 다시 밀어 넣어 방금 끝난 전환을 되돌리는, 레이스를 오히려 주기적으로 만들어버림
+     * flowManager.applyActivationState()는 상대 엔진에게 네트웍 호출을 하지 않는 로컬 동작이라 락을 쥔 채 호출해도 순환 대기X
+     * activate/deactivate 전부 멱등하므로, 이미 올바른 상태인 노드에는 비용이 거의 없음
+     */
+    @Scheduled(fixedDelay = RECONCILE_INTERVAL_SECONDS, timeUnit = TimeUnit.SECONDS)
+    public synchronized void reconcile() {
+        if (Objects.nonNull(this.currentRole)) {
+            this.applyRole(this.currentRole);
+        }
     }
 
     @Override

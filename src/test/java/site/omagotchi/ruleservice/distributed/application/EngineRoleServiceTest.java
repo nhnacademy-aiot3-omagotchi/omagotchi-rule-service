@@ -458,6 +458,30 @@ class EngineRoleServiceTest {
         verify(this.flowManager, never()).applyActivationState(false);
     }
 
+    @Test
+    @DisplayName("역할이 아직 정해지지 않았으면 reconcile은 아무것도 하지 않는다")
+    void reconcileDoesNothingBeforeInitialAssignment() {
+        EngineRoleService engineRoleService = this.newService();
+
+        engineRoleService.reconcile();
+
+        verify(this.flowManager, never()).applyActivationState(anyBoolean());
+    }
+
+    @Test
+    @DisplayName("reconcile은 현재 역할을 그대로 다시 적용한다 - 노드 게이트가 실제 역할과 어긋난 채 남는 좁은 레이스를 다음 주기 안에 스스로 고침")
+    void reconcileReappliesCurrentRole() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of());
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - ACTIVE
+
+        engineRoleService.reconcile();
+
+        verify(this.flowManager, times(2)).applyActivationState(true); // 최초 배정 1회 + reconcile 1회
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */
