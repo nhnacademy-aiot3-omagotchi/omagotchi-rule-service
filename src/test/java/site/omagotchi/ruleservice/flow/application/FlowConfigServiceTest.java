@@ -6,8 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.ruleservice.flow.application.FlowManager;
-import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
@@ -15,8 +14,7 @@ import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,11 +29,16 @@ class FlowConfigServiceTest {
     @Mock
     private PeerFlowSyncPort peerFlowSyncPort;
 
+    @Mock
+    private EngineActivePort engineActivePort;
+
     private FlowConfigService flowConfigService;
 
     @BeforeEach
     void setUp() {
-        flowConfigService = new FlowConfigService(flowManager, peerFlowSyncPort);
+        flowConfigService = new FlowConfigService(flowManager, peerFlowSyncPort, engineActivePort);
+
+        lenient().when(engineActivePort.isSelfActive()).thenReturn(true);
     }
 
     @Test
@@ -178,5 +181,30 @@ class FlowConfigServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verify(peerFlowSyncPort, never()).syncReconfigure(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이 엔진이 ACTIVE가 아니면 reconfigure()는 로컬 적용도 피어 전달도 하지 않고 거부한다")
+    void reconfigureRejectedWhenNotActive() {
+        when(engineActivePort.isSelfActive()).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 200)))
+                .isInstanceOf(BusinessException.class);
+
+        verify(flowManager, never()).getNode(any(), any());
+        verify(peerFlowSyncPort, never()).syncReconfigure(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("reconfigureFromPeer()는 ACTIVE가 아니어도 거부되지 않는다")
+    void reconfigureFromPeerNotRejectedWhenNotActive() {
+        FakeReconfigurableNode node = new FakeReconfigurableNode(NODE_ID, 100);
+        when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(node);
+        when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
+
+        assertThatCode(() ->
+                flowConfigService.reconfigureFromPeer(FLOW_ID, NODE_ID, Map.of("threshold", 200)))
+                .doesNotThrowAnyException();
     }
 }

@@ -117,6 +117,7 @@ public class FlowManager {
 
     // 공개 start 엔드포인트 전용 -> 로컬 적용 후 파트너에게도 전달
     public void start(String flowId) {
+        this.requireActiveEngine(); // 단일 writer 보장 - 액티브만 공개 명령을 받음
         this.startLocally(flowId);
         this.peerFlowSyncPort.syncStart(flowId);
     }
@@ -135,6 +136,7 @@ public class FlowManager {
     // ---- stop ----
 
     public void stop(String flowId) {
+        this.requireActiveEngine();
         this.stopLocally(flowId);
         this.peerFlowSyncPort.syncStop(flowId);
     }
@@ -151,6 +153,7 @@ public class FlowManager {
     // ---- restart ----
 
     public void restart(String flowId) {
+        this.requireActiveEngine();
         this.restartLocally(flowId);
         this.peerFlowSyncPort.syncRestart(flowId);
     }
@@ -164,6 +167,18 @@ public class FlowManager {
         flowEngine.stop(flowId);
         flowEngine.start(flowId);
         this.applyCurrentActivationState(flowId);
+    }
+
+    /**
+     * 공개 변경 명령(start/stop/restart)은 ACTIVE 엔진만 받도록 강제 - 단일 writer 보장
+     * 게이트웨이가 두 엔진 아무 쪽으로나 라우팅할 수 있는 채로 두면,
+     * 서로 다른 두 명령이 동시에 서로 다른 엔진에 도착해 각자 로컬 적용 후 교차 전달되며 최종 상태가 갈라질 수 있음 - ACTIVE만 진입점으로 두면 그 경로 자체가 없어짐
+     * *FromPeer()에는 절대 적용하면 안 됨 - ACTIVE가 STANDBY에게 전파하는 유일한 경로라 여기서 막으면 이중화 자체가 깨짐
+     */
+    private void requireActiveEngine() {
+        if (!this.engineActivePort.isSelfActive()) {
+            throw new BusinessException(FlowErrorCode.ENGINE_NOT_ACTIVE);
+        }
     }
 
     public void remove(String flowId) {

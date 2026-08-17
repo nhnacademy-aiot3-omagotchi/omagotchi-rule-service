@@ -1,9 +1,5 @@
 package site.omagotchi.ruleservice.flow.application;
 
-import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
-import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
-import site.omagotchi.ruleservice.flow.domain.FlowState;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -12,12 +8,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
+import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
+import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Activatable;
+import site.omagotchi.ruleservice.flow.domain.registry.NodeRegistry;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.ConnectionDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.FlowDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.NodeDefinition;
-import site.omagotchi.ruleservice.flow.domain.registry.NodeRegistry;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.List;
@@ -48,6 +47,8 @@ class FlowManagerTest {
     @BeforeEach
     void setUp() {
         flowManager = new FlowManager(flowEngine, nodeRegistry, engineActivePort, peerFlowSyncPort);
+
+        lenient().when(engineActivePort.isSelfActive()).thenReturn(true); // 기본값: ACTIVE (STANDBY 검증하는 테스트만 개별적으로 덮어씀)
     }
 
     private AbstractNode mockNode(String id) {
@@ -339,6 +340,64 @@ class FlowManagerTest {
 
             verify(peerFlowSyncPort, never()).syncRestart(any());
         }
+
+        @Test
+        @DisplayName("이 엔진이 ACTIVE가 아니면 start()는 로컬 적용도 피어 전달도 하지 않고 거부한다")
+        void startRejectedWhenNotActive() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+            when(engineActivePort.isSelfActive()).thenReturn(false);
+
+            assertThatThrownBy(() -> flowManager.start("flow-1"))
+                    .isInstanceOf(BusinessException.class);
+
+            verify(flowEngine, times(1)).start("flow-1"); // deploy()가 만든 호출 1번 뿐 (start()가 막혀서 추가 호출은 없어야 함)
+            verify(peerFlowSyncPort, never()).syncStart(any());
+        }
+
+        @Test
+        @DisplayName("이 엔진이 ACTIVE가 아니면 stop()은 거부한다")
+        void stopRejectedWhenNotActive() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+            when(engineActivePort.isSelfActive()).thenReturn(false);
+
+            assertThatThrownBy(() -> flowManager.stop("flow-1"))
+                    .isInstanceOf(BusinessException.class);
+
+            verify(peerFlowSyncPort, never()).syncStop(any());
+        }
+
+        @Test
+        @DisplayName("이 엔진이 ACTIVE가 아니면 restart()는 거부한다")
+        void restartRejectedWhenNotActive() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+            when(engineActivePort.isSelfActive()).thenReturn(false);
+
+            assertThatThrownBy(() -> flowManager.restart("flow-1"))
+                    .isInstanceOf(BusinessException.class);
+
+            verify(peerFlowSyncPort, never()).syncRestart(any());
+        }
+
+        @Test
+        @DisplayName("startFromPeer()는 ACTIVE가 아니어도 거부되지 않는다 (파트너가 전달한 명령은 항상 로컬 적용)")
+        void startFromPeerNotRejectedWhenNotActive() {
+            FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
+            AbstractNode node = mockNode("nodeA");
+            when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
+            flowManager.deploy(flowDef);
+            when(engineActivePort.isSelfActive()).thenReturn(false);
+
+            assertThatCode(() -> flowManager.startFromPeer("flow-1")).doesNotThrowAnyException();
+        }
     }
 
     @Nested
@@ -504,8 +563,8 @@ class FlowManagerTest {
         }
 
         @Test
-        @DisplayName("start() 후 이 엔진이 STANDBY면 Activatable 노드가 deactivate된다")
-        void startDeactivatesNodeWhenSelfStandby() {
+        @DisplayName("startFromPeer() 후 이 엔진이 STANDBY면 Activatable 노드가 deactivate된다")
+        void startFromPeerDeactivatesNodeWhenSelfStandby() {
             FlowDefinition flowDef = singleNodeFlowDef("flow-1", "nodeA");
             FakeActivatableNode node = new FakeActivatableNode("nodeA");
             when(nodeRegistry.create(eq("SampleSource"), any())).thenReturn(node);
@@ -514,7 +573,7 @@ class FlowManagerTest {
             when(engineActivePort.isSelfActive()).thenReturn(false);
             flowManager.deploy(flowDef);
 
-            flowManager.start("flow-1");
+            flowManager.startFromPeer("flow-1");
 
             assertThat(node.isActivated()).isFalse();
         }
@@ -583,6 +642,7 @@ class FlowManagerTest {
             when(flowEngine.getState("flow-2")).thenReturn(FlowState.RUNNING);
             when(flowEngine.getNode("flow-1", "nodeA")).thenReturn(failingNode);
             when(flowEngine.getNode("flow-2", "nodeB")).thenReturn(healthyNode);
+            when(engineActivePort.isSelfActive()).thenReturn(false); // deploy()가 내부적으로 activate()까지 안 타게 함 - 여기서 검증하려는 건 deploy가 아니라 아래 명시적 applyActivationState(true) 호출
 
             flowManager.deploy(flowDef1);
             flowManager.deploy(flowDef2);

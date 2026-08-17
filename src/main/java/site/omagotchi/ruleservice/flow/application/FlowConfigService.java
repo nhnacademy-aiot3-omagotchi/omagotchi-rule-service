@@ -3,6 +3,7 @@ package site.omagotchi.ruleservice.flow.application;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
 import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.flow.domain.node.Reconfigurable;
@@ -20,6 +21,7 @@ public class FlowConfigService {
 
     private final FlowManager flowManager;
     private final PeerFlowSyncPort peerFlowSyncPort;
+    private final EngineActivePort engineActivePort;
 
     // key: "flowId:nodeId" -> 이 서비스가 마지막으로 성공시킨 config를 스스로 기억
     private final Map<String, Map<String, Object>> appliedConfigs = new ConcurrentHashMap<>();
@@ -30,6 +32,7 @@ public class FlowConfigService {
      * 락을 쥔 채 HTTP 응답을 기다리면 분산 데드락이 되고, 타임아웃 후 처리 순서가 뒤바뀌어 최종 config가 어긋날 수 있음
      */
     public void reconfigure(String flowId, String nodeId, Map<String, Object> newConfig) {
+        this.requireActiveEngine(); // 단일 writer 보장 - 액티브만 공개 명령을 받음
         this.applyReconfigureLocally(flowId, nodeId, newConfig); // 로컬 적용 (내부에서 락 획득)
         this.peerFlowSyncPort.syncReconfigure(flowId, nodeId, newConfig); // 파트너에게 전달 (내부 통신) (락 밖에서 수행)
     }
@@ -77,6 +80,18 @@ public class FlowConfigService {
 
             throw new BusinessException(FlowErrorCode.NODE_CONFIG_REJECTED,
                     "flowId = %s, nodeId = %s, reason = %s".formatted(flowId, nodeId, e.getMessage()));
+        }
+    }
+
+    /**
+     * 공개 변경 명령(start/stop/restart)은 ACTIVE 엔진만 받도록 강제 - 단일 writer 보장
+     * 게이트웨이가 두 엔진 아무 쪽으로나 라우팅할 수 있는 채로 두면,
+     * 서로 다른 두 명령이 동시에 서로 다른 엔진에 도착해 각자 로컬 적용 후 교차 전달되며 최종 상태가 갈라질 수 있음 - ACTIVE만 진입점으로 두면 그 경로 자체가 없어짐
+     * *FromPeer()에는 절대 적용하면 안 됨 - ACTIVE가 STANDBY에게 전파하는 유일한 경로라 여기서 막으면 이중화 자체가 깨짐
+     */
+    private void requireActiveEngine() {
+        if (!this.engineActivePort.isSelfActive()) {
+            throw new BusinessException(FlowErrorCode.ENGINE_NOT_ACTIVE);
         }
     }
 
