@@ -90,16 +90,21 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     }
 
     /**
-     * 정기 자기 치유
-     * FlowManager.applyCurrentActivationState()가 isSelfActive()를 조회하고 노드에 적용하는 구간과
-     * reevaluate()의 역할 전환 사이에는 락이 없어서, 아주 좁은 확률로 둘이 교차하면 노드 게이트가 실제 역할과 어긋난 채 남을 수 있음
-     * (예: 플로우 스타트 도중 조회 직후 역할이 바뀌는 경우)
-     * synchronized 필수 - 없으면 이 메서드가 읽은 낡은 currentRole을 진행 중인 전환 뒤에 뒤늦게 다시 밀어 넣어 방금 끝난 전환을 되돌리는, 레이스를 오히려 주기적으로 만들어버림
-     * flowManager.applyActivationState()는 상대 엔진에게 네트웍 호출을 하지 않는 로컬 동작이라 락을 쥔 채 호출해도 순환 대기X
-     * activate/deactivate 전부 멱등하므로, 이미 올바른 상태인 노드에는 비용이 거의 없음
+     * 정기 자기 치유 - 두 가지를 함께 수행
+     * 1) 역할 재판정: 이 클래스는 onPresenceChanged() 알림에만 의존해 재판정하는데, 피어 상태가 그대로면 알림이 오지 않음
+     *    예를 들어 상위 엔진이 재기동하면서 "이미 활동 중인 하위 피어에게 양보"(judgeRole의 최초 배정 가드)로 STANDBY로 시작하면,
+     *    그 뒤 피어에 아무 변화가 없어 알림이 끊기고 우선순위가 역전된 채 영영 고착됨
+     *    -> 주기적으로 판정을 다시 돌려서 엣지 트리거가 흘린 상황을 흡수함 (판정이 그대로면 아무 일도 하지 않음)
+     * 2) 노드 게이트 재적용: FlowManager.applyCurrentActivationState()의 isSelfActive() 조회와 이 클래스의 역할 전환이
+     *    락 없이 교차하면 게이트가 실제 역할과 어긋난 채 남을 수 있음
+     * synchronized 필수 - 없으면 읽은 낡은 currentRole을 진행 중인 전환 뒤에 뒤늦게 밀어 넣어 방금 끝난 전환을 되돌림
+     * flowManager.applyActivationState()는 상대 엔진에게 네트워크 호출을 하지 않는 로컬 동작이라 락을 쥔 채 호출해도 순환 대기 없음
+     * activate/deactivate 전부 멱등하므로 이미 올바른 상태인 노드에는 비용이 거의 없음
      */
     @Scheduled(fixedDelay = RECONCILE_INTERVAL_SECONDS, timeUnit = TimeUnit.SECONDS)
     public synchronized void reconcile() {
+        this.reevaluate();
+
         if (Objects.nonNull(this.currentRole)) {
             this.applyRole(this.currentRole);
         }
