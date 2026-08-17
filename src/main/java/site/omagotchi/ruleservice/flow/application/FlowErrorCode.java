@@ -31,6 +31,11 @@ public enum FlowErrorCode implements ErrorCode {
             ErrorType.INVALID_INPUT, // 400
             "NODE_CONFIG_REJECTED",
             "노드가 새 config를 거부했습니다."
+    ),
+    ENGINE_NOT_ACTIVE(
+            ErrorType.CONFLICT, // 409
+            "ENGINE_NOT_ACTIVE",
+            "이 엔진은 현재 ACTIVE 상태가 아니라 이 요청을 처리할 수 없습니다. ACTIVE 엔진으로 다시 시도하세요."
     );
 
     private final ErrorType type;

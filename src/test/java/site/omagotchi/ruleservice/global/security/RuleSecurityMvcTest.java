@@ -11,11 +11,21 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import site.omagotchi.ruleservice.distributed.application.EngineIdentityResolver;
+import site.omagotchi.ruleservice.distributed.application.EngineRoleService;
+import site.omagotchi.ruleservice.distributed.application.port.EngineDirectoryPort;
+import site.omagotchi.ruleservice.distributed.domain.EngineInfo;
+import site.omagotchi.ruleservice.distributed.domain.EngineRole;
+import site.omagotchi.ruleservice.distributed.domain.PresenceStatus;
+import site.omagotchi.ruleservice.distributed.presentation.EngineController;
 import site.omagotchi.ruleservice.flow.application.FlowConfigService;
 import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.presentation.FlowController;
 import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
+import site.omagotchi.ruleservice.recovery.application.ReplayService;
+import site.omagotchi.ruleservice.recovery.domain.ReplayResult;
+import site.omagotchi.ruleservice.recovery.presentation.ReplayController;
 import site.omagotchi.ruleservice.rule.domain.RuleCache;
 import site.omagotchi.ruleservice.rule.presentation.RuleController;
 import site.omagotchi.ruleservice.rule.presentation.RulePingController;
@@ -37,9 +47,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         controllers = {
                 FlowController.class,
                 RuleController.class,
-                RulePingController.class
+                RulePingController.class,
+                EngineController.class,
+                ReplayController.class
         },
-        properties = "spring.application.name=rule-service"
+        properties = {
+                "spring.application.name=rule-service",
+                "eureka.client.enabled=true" // EngineController의 @ConditionalOnProperty 통과시키기 위함
+        }
 )
 @Import({
         SecurityConfig.class,
@@ -48,7 +63,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityErrorResponseHandler.class,
         TestJwtKeyConfig.class
 })
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        InternalAuthProperties.class
+})
 @ActiveProfiles("test")
 class RuleSecurityMvcTest {
 
@@ -63,6 +81,18 @@ class RuleSecurityMvcTest {
 
     @MockitoBean
     private FlowConfigService flowConfigService;
+
+    @MockitoBean
+    private EngineIdentityResolver engineIdentityResolver;
+
+    @MockitoBean
+    private EngineRoleService engineRoleService;
+
+    @MockitoBean
+    private EngineDirectoryPort engineDirectoryPort;
+
+    @MockitoBean
+    private ReplayService replayService;
 
     @Test
     @DisplayName("정확한 Rule ping 경로는 Access JWT 없이 호출")
@@ -176,5 +206,90 @@ class RuleSecurityMvcTest {
         result
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("Engine 목록 조회는 Access JWT가 없으면 401")
+    void rejectEngineListWithoutToken() throws Exception {
+        ResultActions result = mockMvc.perform(get("/api/v1/engines"));
+
+        result
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+
+        verifyNoInteractions(engineIdentityResolver, engineDirectoryPort, engineRoleService);
+    }
+
+    @Test
+    @DisplayName("외부 사용자 Header를 붙여도 USER의 Engine 목록 조회는 403")
+    void rejectsUserFromEngineListDespiteSpoofedHeaders() throws Exception {
+        String userToken = TestJwtKeyConfig.issue("USER");
+
+        ResultActions result = mockMvc.perform(get("/api/v1/engines")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
+                .header("X-Global-Role", "SYSTEM_ADMIN"));
+
+        result
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+        verifyNoInteractions(engineIdentityResolver, engineDirectoryPort, engineRoleService);
+    }
+
+    @Test
+    @DisplayName("SYSTEM_ADMIN은 Engine 목록을 조회할 수 있다")
+    void permitsSystemAdminEngineListRequest() throws Exception {
+        EngineInfo self = new EngineInfo(
+                "engine-a", "localhost", 8081, 1, 0L,
+                PresenceStatus.SELF, null
+        );
+        given(engineIdentityResolver.getSelf()).willReturn(self);
+        given(engineRoleService.getCurrentRole()).willReturn(EngineRole.ACTIVE);
+        given(engineDirectoryPort.listEngines()).willReturn(List.of());
+        String adminToken = TestJwtKeyConfig.issue("SYSTEM_ADMIN");
+
+        ResultActions result = mockMvc.perform(get("/api/v1/engines")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken));
+
+        result.andExpect(status().isOk());
+        verify(engineDirectoryPort).listEngines();
+    }
+
+    @Test
+    @DisplayName("Replay API는 Access JWT가 없으면 401")
+    void rejectsReplayWithoutToken() throws Exception {
+        ResultActions result = mockMvc.perform(post("/api/v1/recovery/replay"));
+
+        result
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+        verifyNoInteractions(replayService);
+    }
+
+    @Test
+    @DisplayName("외부 사용자 Header를 붙여도 USER의 Replay 호출은 403")
+    void rejectsUserFromReplayDespiteSpoofedHeaders() throws Exception {
+        String userToken = TestJwtKeyConfig.issue("USER");
+
+        ResultActions result = mockMvc.perform(post("/api/v1/recovery/replay")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
+                .header("X-Global-Role", "SYSTEM_ADMIN"));
+
+        result
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+        verifyNoInteractions(replayService);
+    }
+
+    @Test
+    @DisplayName("SYSTEM_ADMIN은 Replay를 호출할 수 있다")
+    void permitsSystemAdminReplayRequest() throws Exception {
+        given(replayService.replay(100)).willReturn(new ReplayResult(0));
+        String adminToken = TestJwtKeyConfig.issue("SYSTEM_ADMIN");
+
+        ResultActions result = mockMvc.perform(post("/api/v1/recovery/replay")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken));
+
+        result.andExpect(status().isOk());
+        verify(replayService).replay(100);
     }
 }

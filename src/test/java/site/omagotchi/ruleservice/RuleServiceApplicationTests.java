@@ -6,9 +6,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.ruleservice.global.security.TestJwtKeyConfig;
 
-@SpringBootTest
 @Import(TestJwtKeyConfig.class)
 @ActiveProfiles("test")
+@SpringBootTest(properties = {
+        "eureka.client.enabled=false",
+        "core.base-url=temp",
+        "engine.id=test-engine",
+        "engine.priority=1"
+})
 class RuleServiceApplicationTests {
 
     @Test

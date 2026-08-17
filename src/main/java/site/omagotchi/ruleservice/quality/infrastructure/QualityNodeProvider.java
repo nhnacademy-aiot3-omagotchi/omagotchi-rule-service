@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.flow.domain.registry.NodeDescriptor;
 import site.omagotchi.ruleservice.flow.domain.registry.NodeProvider;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 
@@ -28,6 +29,7 @@ public class QualityNodeProvider implements NodeProvider {
     private final PhysicalRangeTable physicalRangeTable;
     private final LastSeenRegistry lastSeenRegistry;
     private final QualityProperties qualityProperties;
+    private final Clock clock;
 
     @Override
     public List<NodeDescriptor> provide() {
@@ -50,7 +52,7 @@ public class QualityNodeProvider implements NodeProvider {
                 // 4. DisconnectDetector
                 new NodeDescriptor(TYPE_DISCONNECT_DETECTOR, "끊김 판정 노드", config -> {
                     String id = Objects.requireNonNull((String) config.get("id"), "노드 config에 id가 없습니다");
-                    return new DisconnectDetectorNode(id, lastSeenRegistry, qualityProperties);
+                    return new DisconnectDetectorNode(id, lastSeenRegistry, qualityProperties, this.clock);
                 })
         );
     }

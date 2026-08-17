@@ -1,18 +1,19 @@
 package site.omagotchi.ruleservice.flow.application;
 
-import site.omagotchi.ruleservice.flow.domain.FlowState;
-
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
-import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
-import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
+import site.omagotchi.ruleservice.flow.application.port.EngineActivePort;
+import site.omagotchi.ruleservice.flow.application.port.PeerFlowSyncPort;
 import site.omagotchi.ruleservice.flow.domain.Flow;
+import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
+import site.omagotchi.ruleservice.flow.domain.node.Activatable;
+import site.omagotchi.ruleservice.flow.domain.registry.NodeRegistry;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.ConnectionDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.FlowDefinition;
 import site.omagotchi.ruleservice.flow.infrastructure.parser.NodeDefinition;
-import site.omagotchi.ruleservice.flow.domain.registry.NodeRegistry;
+import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
 import site.omagotchi.ruleservice.global.exception.BusinessException;
 
 import java.util.*;
@@ -20,12 +21,24 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class FlowManager {
 
     private final FlowEngine flowEngine;
     private final NodeRegistry nodeRegistry;
+    private final EngineActivePort engineActivePort;
+    private final PeerFlowSyncPort peerFlowSyncPort;
     private final Map<String, FlowEntry> flowEntries = new ConcurrentHashMap<>();
+
+    public FlowManager(FlowEngine flowEngine,
+                       NodeRegistry nodeRegistry,
+                       @Lazy EngineActivePort engineActivePort,
+                       @Lazy PeerFlowSyncPort peerFlowSyncPort) {
+
+        this.flowEngine = flowEngine;
+        this.nodeRegistry = nodeRegistry;
+        this.engineActivePort = engineActivePort;
+        this.peerFlowSyncPort = peerFlowSyncPort;
+    }
 
     // deploy가 등록과 시작 한 번에 함
     // 검증 -> 노드 생성(NodeRegistry) -> 배선 -> FlowEngine 등록/시작 (중복 id는 예외)
@@ -56,6 +69,7 @@ public class FlowManager {
 
         // FlowManager가 관리하는 상태로 등록
         flowEntries.put(flowDef.id(), new FlowEntry(flowDef));
+        this.applyCurrentActivationState(flowDef.id());
         log.debug("[{}] 플로우 배포 및 등록 완료", flowDef.id());
     }
 
@@ -99,20 +113,72 @@ public class FlowManager {
         return flow;
     }
 
+    // ---- start ----
+
+    // 공개 start 엔드포인트 전용 -> 로컬 적용 후 파트너에게도 전달
     public void start(String flowId) {
+        this.requireActiveEngine(); // 단일 writer 보장 - 액티브만 공개 명령을 받음
+        this.startLocally(flowId);
+        this.peerFlowSyncPort.syncStart(flowId);
+    }
+
+    // 내부 전용 start 엔드포인트 전용 - 파트너가 이미 결정한 걸 로컬에만 적용, 재전달X (무한루프 방지)
+    public void startFromPeer(String flowId) {
+        this.startLocally(flowId);
+    }
+
+    private void startLocally(String flowId) {
         this.requireEntry(flowId);
         flowEngine.start(flowId);
+        this.applyCurrentActivationState(flowId);
     }
+
+    // ---- stop ----
 
     public void stop(String flowId) {
+        this.requireActiveEngine();
+        this.stopLocally(flowId);
+        this.peerFlowSyncPort.syncStop(flowId);
+    }
+
+    public void stopFromPeer(String flowId) {
+        this.stopLocally(flowId);
+    }
+
+    private void stopLocally(String flowId) {
         this.requireEntry(flowId);
         flowEngine.stop(flowId);
     }
 
+    // ---- restart ----
+
     public void restart(String flowId) {
+        this.requireActiveEngine();
+        this.restartLocally(flowId);
+        this.peerFlowSyncPort.syncRestart(flowId);
+    }
+
+    public void restartFromPeer(String flowId) {
+        this.restartLocally(flowId);
+    }
+
+    private void restartLocally(String flowId) {
         this.requireEntry(flowId);
         flowEngine.stop(flowId);
         flowEngine.start(flowId);
+        this.applyCurrentActivationState(flowId);
+    }
+
+    /**
+     * 공개 변경 명령(start/stop/restart)은 ACTIVE 엔진만 받도록 강제 - 단일 writer 보장
+     * 게이트웨이가 두 엔진 아무 쪽으로나 라우팅할 수 있는 채로 두면,
+     * 서로 다른 두 명령이 동시에 서로 다른 엔진에 도착해 각자 로컬 적용 후 교차 전달되며 최종 상태가 갈라질 수 있음 - ACTIVE만 진입점으로 두면 그 경로 자체가 없어짐
+     * *FromPeer()에는 절대 적용하면 안 됨 - ACTIVE가 STANDBY에게 전파하는 유일한 경로라 여기서 막으면 이중화 자체가 깨짐
+     */
+    private void requireActiveEngine() {
+        if (!this.engineActivePort.isSelfActive()) {
+            throw new BusinessException(FlowErrorCode.ENGINE_NOT_ACTIVE);
+        }
     }
 
     public void remove(String flowId) {
@@ -191,6 +257,83 @@ public class FlowManager {
         return flowEntries.keySet().stream() // flowEntries.keySet() = flowId들
                 .map(this::getSummary)
                 .toList();
+    }
+
+    /**
+     * 배포된 모든 플로우(전체 플로우 대상)를 통틀어서 Activatable을 구현한 노드만 모아서 리턴
+     * EngineRoleService가 역할 전환 시 activate()/deactivate()를 지시할 대상
+     * getActivatableNodesOf()를 재사용 -> "멈춘 플로우 제외" 동작 상속받음
+     */
+    public List<Activatable> getActivatableNodes() {
+        List<Activatable> activatables = new ArrayList<>();
+
+        for (String flowId : this.flowEntries.keySet()) {
+            activatables.addAll(this.getActivatableNodesOf(flowId));
+        }
+
+        return activatables;
+    }
+
+    // 단일 플로우 안의 Activatable 노드만 모아서 리턴
+    // 멈춰있는 플로우는 빈 목록 리턴
+    private List<Activatable> getActivatableNodesOf(String flowId) {
+        List<Activatable> activatables = new ArrayList<>();
+
+        if (this.flowEngine.getState(flowId) != FlowState.RUNNING) {
+            return activatables; // 멈춰있는 플로우의 노드는 활성화 대상에서 제외 (EngineRoleService가 건드리면 안 됨)
+        }
+
+        FlowEntry flowEntry = this.flowEntries.get(flowId);
+
+        for (NodeDefinition nodeDef : flowEntry.flowDefinition().nodes()) {
+            AbstractNode node = this.flowEngine.getNode(flowId, nodeDef.id());
+
+            if (node instanceof Activatable activatable) {
+                activatables.add(activatable);
+            }
+        }
+
+        return activatables;
+    }
+
+    // 재기동 후 "지금 현재" 역할에 맞게 활성화 상태를 결정
+    // (stop 직전 상태를 기억해뒀다가 복원하는 방식은, 그 사이 failover로 역할이 바뀌면 옛날 상태를 복원하게 되어 옳지 않음)
+    private void applyCurrentActivationState(String flowId) {
+        boolean shouldBeActive = this.engineActivePort.isSelfActive();
+
+        for (Activatable activatable : this.getActivatableNodesOf(flowId)) {
+            if (shouldBeActive) {
+                activatable.activate();
+            } else {
+                activatable.deactivate();
+            }
+        }
+    }
+
+    /**
+     * 배포된 모든 플로우의 Activatable 노드를 주어진 활성화 상태로 맞춤
+     * EngineRoleService(역할 판정), SingleEngineMode(단일 엔진 모드)가 역할 전환 시 호출하는 진입점
+     * 노드 하나가 실패해도 나머지 노드는 계속 처리(격리) - 역할 전환은 이미 결정된 뒤라 부분 실패로 전체를 막으면 안 됨
+     *
+     * @return 노드 전부 성공적으로 전환됐으면 true, 하나라도 실패했으면 false
+     */
+    public boolean applyActivationState(boolean shouldBeActive) {
+        boolean allSucceeded = true;
+
+        for (Activatable activatable : this.getActivatableNodes()) {
+            try {
+                if (shouldBeActive) {
+                    activatable.activate();
+                } else {
+                    activatable.deactivate();
+                }
+            } catch (RuntimeException e) {
+                log.error("[FlowManager] 노드 활성화 상태 전환 실패 - 이 노드만 건너뛰고 계속 진행 (shouldBeActive = {})", shouldBeActive, e);
+                allSucceeded = false;
+            }
+        }
+
+        return allSucceeded;
     }
 
     // FlowManager 차원의 존재 확인
