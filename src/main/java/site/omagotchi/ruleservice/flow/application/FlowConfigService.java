@@ -26,16 +26,18 @@ public class FlowConfigService {
 
     /**
      * 공개 PATCH 엔드포인트 전용 -> 로컬 적용 후 파트너에게도 전달
+     * 피어 호출은 락 밖에서 수행 - 양쪽에 동시 PATCH가 들어와 서로의 reconfigureFromPeer를 부르는 상황에서
+     * 락을 쥔 채 HTTP 응답을 기다리면 분산 데드락이 되고, 타임아웃 후 처리 순서가 뒤바뀌어 최종 config가 어긋날 수 있음
      */
-    public synchronized void reconfigure(String flowId, String nodeId, Map<String, Object> newConfig) {
-        this.applyReconfigureLocally(flowId, nodeId, newConfig); // 로컬 적용
-        this.peerFlowSyncPort.syncReconfigure(flowId, nodeId, newConfig); // 파트너에게 전달 (내부 통신)
+    public void reconfigure(String flowId, String nodeId, Map<String, Object> newConfig) {
+        this.applyReconfigureLocally(flowId, nodeId, newConfig); // 로컬 적용 (내부에서 락 획득)
+        this.peerFlowSyncPort.syncReconfigure(flowId, nodeId, newConfig); // 파트너에게 전달 (내부 통신) (락 밖에서 수행)
     }
 
     /**
      * 내부 전용 엔드포인트 전용 -> 파트너가 이미 결정한 걸 로컬에만 적용, 재전달X (무한루프 방지)
      */
-    public synchronized void reconfigureFromPeer(String flowId, String nodeId, Map<String, Object> newConfig) {
+    public void reconfigureFromPeer(String flowId, String nodeId, Map<String, Object> newConfig) {
         this.applyReconfigureLocally(flowId, nodeId, newConfig);
     }
 
@@ -43,7 +45,7 @@ public class FlowConfigService {
      * synchronized가 붙으면서 인스턴스 전체(이 서비스 Bean 하나)를 락으로 쓰는거라서, 서로 다른 플로우/노드에 대한 PATCH도 이 메서드 안에서는 직렬화됨
      * -> PATCH는 자주 운영되는 게 아니라 일단 이렇게 하기는 했으나, 혹시 나중에 이 부분이 병목이 되면 그때 노드별 락으로 세분화
      */
-    private void applyReconfigureLocally(String flowId, String nodeId, Map<String, Object> newConfig) {
+    private synchronized void applyReconfigureLocally(String flowId, String nodeId, Map<String, Object> newConfig) {
         AbstractNode node = flowManager.getNode(flowId, nodeId); // 없으면 BusinessException(404)
 
         if (!(node instanceof Reconfigurable reconfigurable)) {
