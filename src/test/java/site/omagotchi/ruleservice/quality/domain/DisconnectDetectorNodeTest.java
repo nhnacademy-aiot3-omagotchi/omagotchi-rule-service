@@ -1,6 +1,7 @@
 package site.omagotchi.ruleservice.quality.domain;
 
 import site.omagotchi.ruleservice.distributed.application.MutableClock;
+import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
 import org.junit.jupiter.api.AfterEach;
@@ -13,6 +14,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -184,36 +187,43 @@ class DisconnectDetectorNodeTest {
     }
 
     /**
-     * 이 테스트는 실제로 6초를 기다리는 테스트라서 느림
-     * CHECK_INTERNAL(현재 5초, private 상수)가 나중에 바뀌면 이 테스트의 대기 시간도 같이 조정해야 함 (기억할 것)
-     * MutableClock을 그대로 쓰면 advance() 없이는 시간이 안 흘러서 check()가 항상 "경과 0초"로 계산해 결측을 절대 못 잡음
-     * -> 이 테스트만 실제 시계(Clock.systemUTC())를 써서 실제 대기 시간과 판정 기준이 같이 흐르게 함
+     * 이 테스트는 최대 10초까지 기다릴 수 있는 느린 테스트
+     * 첫 실행이 정확히 CHECK_INTERVAL(5초) 뒤라는 보장이 없어(스케줄링 지연) 고정 sleep 대신 CountDownLatch로 대기
      */
     @Test
     @DisplayName("shutdown 후 재기동(initialize -> activate)하면 결측 감지 타이머가 다시 걸린다")
     void reschedulesCheckTimerAfterShutdownThenReinitialize() throws InterruptedException {
-        // 임계값을 짧게(1초 * 3배 = 3초) 잡아서, CHECK_INTERVAL(5초) 첫 틱에서 곧바로 결측으로 판정되게 함
         QualityProperties properties = new QualityProperties(
                 Map.of(), List.of(new QualityProperties.SensorId("eui-3", "temperature", 1))
         );
         DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh-restart", this.registry, properties, Clock.systemUTC());
-        RecordingConnection freshDisconnect = new RecordingConnection();
+
+        CountDownLatch firstEventArrived = new CountDownLatch(1);
+        RecordingConnection freshDisconnect = new RecordingConnection() {
+            @Override
+            public void deliver(Message message) throws InterruptedException {
+                super.deliver(message);
+                firstEventArrived.countDown();
+            }
+        };
         freshNode.getOutputPort("disconnect").connect(freshDisconnect);
 
-        freshNode.initialize();
-        freshNode.activate(); // 최초 기동 - 타이머 등록
+        try {
+            freshNode.initialize();
+            freshNode.activate(); // 최초 기동 - 타이머 등록
 
-        freshNode.shutdown(); // FlowEngine.stop()에 해당 - 버그가 있으면 checkTask가 낡은 채로 남음
-        freshNode.initialize(); // FlowEngine.start()에 해당 - 새 executor 생성
-        freshNode.activate(); // 재승격 - 버그가 있으면 checkTask != null이라 여기서 조용히 아무 일도 안 함
+            freshNode.shutdown(); // FlowEngine.stop()에 해당 - 버그가 있으면 checkTask가 낡은 채로 남음
+            freshNode.initialize(); // FlowEngine.start()에 해당 - 새 executor 생성
+            freshNode.activate(); // 재승격 - 버그가 있으면 checkTask != null이라 여기서 조용히 아무 일도 안 함
 
-        Thread.sleep(6_000); // CHECK_INTERVAL(5초)이 최소 한 번은 돌 수 있는 시간만큼 대기
+            boolean arrived = firstEventArrived.await(10, TimeUnit.SECONDS); // CHECK_INTERVAL(5초) + 여유
+            assertThat(arrived).isTrue();
 
-        // 타이머가 실제로 다시 돌고 있다면, 첫 틱에서 곧바로 결측(끊김 시작) 이벤트가 나와야 함
-        assertThat(freshDisconnect.messages()).hasSize(1);
-        QualityEvent qualityEvent = freshDisconnect.messages().getFirst().get("qualityEvent");
-        assertThat(qualityEvent.detail()).isEqualTo("끊김 시작");
-
-        freshNode.shutdown();
+            assertThat(freshDisconnect.messages()).hasSize(1);
+            QualityEvent qualityEvent = freshDisconnect.messages().getFirst().get("qualityEvent");
+            assertThat(qualityEvent.detail()).isEqualTo("끊김 시작");
+        } finally {
+            freshNode.shutdown();
+        }
     }
 }
