@@ -82,6 +82,8 @@ public class FlowEngine {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
+            } catch (Exception e) {
+                log.error("[{} -> {}] 메시지 처리 중 예외 발생 - 이 메시지만 건너뛰고 소비 스레드는 계속 유지", wire.sourceNodeId(), wire.targetNodeId(), e);
             }
         }
     }

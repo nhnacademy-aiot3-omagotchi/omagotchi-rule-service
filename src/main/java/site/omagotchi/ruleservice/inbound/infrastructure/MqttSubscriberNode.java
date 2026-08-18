@@ -181,6 +181,12 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
      * 그래서 연결이 완료될 때마다(최초 연결 포함) 현재 게이트 상태(activated)와 브로커 쪽 구독 상태를 항상 맞춰줌
      * waitForCompletion()으로 여기서 기다리면 Paho 내부 콜백 스레드가 멈춰서 교착상태나 클라이언트 전체 정체로 이어질 수 있음 (Paho 공식문서 경고)
      * -> 완료를 기다리지 않고 비동기 콜백으로만 결과를 확인함
+     * <p>
+     * [TODO 알려진 한계, 의도적으로 고치지 않음] activate()/deactivate()는 synchronized(this)를 쥔 채 waitForCompletion()으로 블로킹 대기하는데,
+     * 이 메서드도 같은 락(synchronized)이라, 하필 재연결과 activate()/deactivate() 호출이 겹치면 Paho 콜백 스레드가 그 락을 기다리다가 데드락으로 이어질 수 있음 (추정임)
+     * 이 메서드의 synchronized를 없애 락 대기 자체를 없애는 수정도 검토했으나, 그러면 activate()/deactivate()가 아직 activated 필드를 갱신하기 전(브로커 응답 대기 중)인 상태를 이 메서드가 그대로 읽어버려서
+     * 반대 방향 subscribe/unsubscribe를 동시에 쏘는 다른 레이스(로컬 activated=true인데 브로커는 반대 상태 - 조용한 메시지 유실)가 새로 생겨서 채택 안 함.
+     * 확정 안 된 위험끼리의 트레이드오프라 근거 없이 교체하지 않기로 함 - FlowManager의 start/stop/restart 호출이 원인 불명으로 멈추는 로그가 관측되면 그때 재검토.
      */
     @Override
     public synchronized void connectComplete(boolean reconnect, String serverURI) {
