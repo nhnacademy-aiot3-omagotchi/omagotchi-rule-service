@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
@@ -29,7 +30,11 @@ class InternalServiceAuthFilterTest {
     @BeforeEach
     void setUp() {
         InternalAuthProperties internalAuthProperties = new InternalAuthProperties(SHARED_SECRET);
-        this.internalServiceAuthFilter = new InternalServiceAuthFilter(internalAuthProperties, new ObjectMapper());
+        this.internalServiceAuthFilter = new InternalServiceAuthFilter(
+                internalAuthProperties,
+                new ObjectMapper(),
+                PathPatternRequestMatcher.withDefaults().matcher("/api/v1/internal/**")
+        );
     }
 
     @Test
@@ -91,5 +96,21 @@ class InternalServiceAuthFilterTest {
 
         verify(this.filterChain).doFilter(request, response);
         assertThat(response.getStatus()).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    @DisplayName("Context Path가 있어도 내부 API Credential을 검증한다")
+    void validatesInternalPathWithContextPath() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "GET",
+                "/rule/api/v1/internal/engines/self"
+        );
+        request.setContextPath("/rule");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        this.internalServiceAuthFilter.doFilter(request, response, this.filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        verify(this.filterChain, never()).doFilter(request, response);
     }
 }
