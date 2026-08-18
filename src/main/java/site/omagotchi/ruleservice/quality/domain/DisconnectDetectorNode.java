@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
-
 import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
@@ -50,15 +48,20 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
      * STANDBY 상태에서 이 타이머가 돌면 LastSeenRegistry가 비어있어(전환 시 이관 안 함) 잘못된 결측 판정이 날 수 있음
      */
     @Override
-    public void initialize() {
+    public synchronized void initialize() {
         scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         startedAt = Instant.now(this.clock);
         super.initialize();
     }
 
     @Override
-    public void shutdown() {
-        if (scheduledExecutorService != null) {
+    public synchronized void shutdown() {
+        if (Objects.nonNull(this.checkTask)) {
+            this.checkTask.cancel(false);
+            this.checkTask = null; // 재기동 시 activate()가 낡은 참조를 보고 재등록을 건너뛰지 않도록
+        }
+
+        if (Objects.nonNull(scheduledExecutorService)) {
             scheduledExecutorService.shutdown();
         }
         super.shutdown();
