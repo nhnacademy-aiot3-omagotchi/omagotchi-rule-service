@@ -70,7 +70,7 @@ public class FlowManager {
         // FlowManager가 관리하는 상태로 등록
         flowEntries.put(flowDef.id(), new FlowEntry(flowDef));
         this.applyCurrentActivationState(flowDef.id());
-        log.debug("[{}] 플로우 배포 및 등록 완료", flowDef.id());
+        log.info("[{}] 플로우 배포 및 등록 완료 - 노드 {}개", flowDef.id(), flowDef.nodes().size());
     }
 
     private Flow buildFlow(FlowDefinition flowDef) {

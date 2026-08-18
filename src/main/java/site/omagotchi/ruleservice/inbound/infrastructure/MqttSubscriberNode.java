@@ -59,6 +59,8 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
      */
     @Override
     public void initialize() {
+        log.info("[{}] MQTT 연결 시도 - brokerUrl = {}, clientId = {}, topicFilter = {}", getId(), brokerUrl, clientId, topicFilter);
+
         try {
             MqttConnectionOptions mqttConnectionOptions = new MqttConnectionOptions();
 
@@ -88,7 +90,7 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
             mqttAsyncClient.connect(mqttConnectionOptions).waitForCompletion();
 
         } catch (MqttException e) {
-            log.error("[{}] MQTT 초기화 실패 (brokerUrl={})", getId(), brokerUrl, e);
+            log.error("[{}] MQTT 초기화 실패 (brokerUrl = {})", getId(), brokerUrl, e);
             throw new RuntimeException(e);
         }
         super.initialize();
