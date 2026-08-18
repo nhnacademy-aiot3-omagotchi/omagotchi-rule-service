@@ -29,6 +29,8 @@
     <properties>
         <java.version>21</java.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
+        <sonar.projectKey>aiot3-team5-omagotchi-rule-service</sonar.projectKey>
+        <sonar.projectName>aiot3-team5-omagotchi-rule-service</sonar.projectName>
     </properties>
     <dependencies>
         <dependency>
@@ -166,6 +168,28 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <haltOnFailure>true</haltOnFailure>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.60</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
