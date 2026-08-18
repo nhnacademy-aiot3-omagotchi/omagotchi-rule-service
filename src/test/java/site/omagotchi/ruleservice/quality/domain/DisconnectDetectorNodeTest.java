@@ -1,6 +1,7 @@
 package site.omagotchi.ruleservice.quality.domain;
 
 import site.omagotchi.ruleservice.distributed.application.MutableClock;
+import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
 import org.junit.jupiter.api.AfterEach;
@@ -8,10 +9,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -180,5 +184,46 @@ class DisconnectDetectorNodeTest {
         assertThat(freshDisconnect.messages()).isEmpty();
 
         freshNode.shutdown();
+    }
+
+    /**
+     * 이 테스트는 최대 10초까지 기다릴 수 있는 느린 테스트
+     * 첫 실행이 정확히 CHECK_INTERVAL(5초) 뒤라는 보장이 없어(스케줄링 지연) 고정 sleep 대신 CountDownLatch로 대기
+     */
+    @Test
+    @DisplayName("shutdown 후 재기동(initialize -> activate)하면 결측 감지 타이머가 다시 걸린다")
+    void reschedulesCheckTimerAfterShutdownThenReinitialize() throws InterruptedException {
+        QualityProperties properties = new QualityProperties(
+                Map.of(), List.of(new QualityProperties.SensorId("eui-3", "temperature", 1))
+        );
+        DisconnectDetectorNode freshNode = new DisconnectDetectorNode("fresh-restart", this.registry, properties, Clock.systemUTC());
+
+        CountDownLatch firstEventArrived = new CountDownLatch(1);
+        RecordingConnection freshDisconnect = new RecordingConnection() {
+            @Override
+            public void deliver(Message message) throws InterruptedException {
+                super.deliver(message);
+                firstEventArrived.countDown();
+            }
+        };
+        freshNode.getOutputPort("disconnect").connect(freshDisconnect);
+
+        try {
+            freshNode.initialize();
+            freshNode.activate(); // 최초 기동 - 타이머 등록
+
+            freshNode.shutdown(); // FlowEngine.stop()에 해당 - 버그가 있으면 checkTask가 낡은 채로 남음
+            freshNode.initialize(); // FlowEngine.start()에 해당 - 새 executor 생성
+            freshNode.activate(); // 재승격 - 버그가 있으면 checkTask != null이라 여기서 조용히 아무 일도 안 함
+
+            boolean arrived = firstEventArrived.await(10, TimeUnit.SECONDS); // CHECK_INTERVAL(5초) + 여유
+            assertThat(arrived).isTrue();
+
+            assertThat(freshDisconnect.messages()).hasSize(1);
+            QualityEvent qualityEvent = freshDisconnect.messages().getFirst().get("qualityEvent");
+            assertThat(qualityEvent.detail()).isEqualTo("끊김 시작");
+        } finally {
+            freshNode.shutdown();
+        }
     }
 }

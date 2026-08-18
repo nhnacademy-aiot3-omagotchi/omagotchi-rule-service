@@ -86,6 +86,8 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
      */
     @PostConstruct
     public void scheduleInitialEvaluation() {
+        log.info("[EngineRoleService] 기동 - {}ms 뒤 첫 역할 판정 예정 (id = {}, priority = {})", INITIAL_WAIT_MS, this.engineProperties.id(), this.engineProperties.priority());
+
         this.taskScheduler.schedule(
                 this::reevaluate,
                 Instant.now(this.clock).plusMillis(INITIAL_WAIT_MS)
@@ -212,7 +214,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
     }
 
     private void applyRoleChange(EngineRole judged) {
-        log.info("역할 전환: {} -> {}", this.currentRole, judged);
+        log.info("[EngineRoleService] 역할 전환: {} -> {} (id = {}, priority = {})", this.currentRole, judged, this.engineProperties.id(), this.engineProperties.priority());
         this.currentRole = judged;
         this.applyRole(judged);
     }

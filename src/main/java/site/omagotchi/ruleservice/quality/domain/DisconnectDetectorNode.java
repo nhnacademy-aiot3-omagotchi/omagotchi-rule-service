@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
-
 import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
@@ -11,10 +9,7 @@ import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
 
 @Slf4j
@@ -50,15 +45,20 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
      * STANDBY 상태에서 이 타이머가 돌면 LastSeenRegistry가 비어있어(전환 시 이관 안 함) 잘못된 결측 판정이 날 수 있음
      */
     @Override
-    public void initialize() {
+    public synchronized void initialize() {
         scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         startedAt = Instant.now(this.clock);
         super.initialize();
     }
 
     @Override
-    public void shutdown() {
-        if (scheduledExecutorService != null) {
+    public synchronized void shutdown() {
+        if (Objects.nonNull(this.checkTask)) {
+            this.checkTask.cancel(false);
+            this.checkTask = null; // 재기동 시 activate()가 낡은 참조를 보고 재등록을 건너뛰지 않도록
+        }
+
+        if (Objects.nonNull(scheduledExecutorService)) {
             scheduledExecutorService.shutdown();
         }
         super.shutdown();
@@ -105,9 +105,22 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
     }
 
     // 테스트에서 직접 호출하기 위해 package-private
-    void check() {
+    synchronized void check() {
+        for (QualityEvent qualityEvent : this.evaluate()) {
+            send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
+        }
+    }
+
+    /**
+     * disconnectKeys/startedAt 읽기 쓰기는 lifecycle 메서드(initialize/activate/deactivate/shutdown)와 동일한 락으로 직렬화해서, 재기동 도중 겹친 이전 실행이 상태를 잘못 건드리지 않게 함
+     * send()는 여기서 안 함 - 하위 큐가 가득 차면 블로킹될 수 있는데(LocalConnection.deliver -> put()),
+     * 락을 쥔 채로 블로킹되면 shutdown()/activate() 등 lifecycle 메서드 전체가 멈출 수 있음 (MQTT와 같은 이유)
+     * -> "뭘 보낼지"만 여기서 정하고, 실제 send()는 락 밖에서 수행
+     */
+    private synchronized List<QualityEvent> evaluate() {
         Instant now = Instant.now(this.clock);
         Instant baseline = this.startedAt; // 순회 중 activate()가 끼어들어도 한 번의 판정은 같은 기준으로
+        List<QualityEvent> events = new ArrayList<>();
 
         for (QualityProperties.SensorId sensor : qualityProperties.inventory()) {
             String deviceEui = sensor.deviceEui();
@@ -131,16 +144,15 @@ public class DisconnectDetectorNode extends AbstractNode implements Activatable 
             if (isDisconnect && !wasDisconnect) {
                 disconnectKeys.add(key);
                 log.info("[{}] {}", DETAIL_START, key);
-                QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui, measurement, DETAIL_START);
-
-                send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
+                events.add(QualityEvent.disconnected(deviceEui, measurement, DETAIL_START));
             } else if (!isDisconnect && wasDisconnect) {
                 disconnectKeys.remove(key);
                 log.info("[{}] {}", DETAIL_END, key);
-                QualityEvent qualityEvent = QualityEvent.disconnected(deviceEui, measurement, DETAIL_END);
-                send("disconnect", Message.of(Map.of("qualityEvent", qualityEvent)));
+                events.add(QualityEvent.disconnected(deviceEui, measurement, DETAIL_END));
             }
         }
+
+        return events;
     }
 
     private static String key(String deviceEui, String measurement) {

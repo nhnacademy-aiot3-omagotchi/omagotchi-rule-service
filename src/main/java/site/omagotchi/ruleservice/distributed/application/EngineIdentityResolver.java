@@ -1,6 +1,7 @@
 package site.omagotchi.ruleservice.distributed.application;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ import java.time.Clock;
         havingValue = "true",
         matchIfMissing = true
 )
+@Slf4j
 public class EngineIdentityResolver {
 
     @Getter
@@ -40,5 +42,8 @@ public class EngineIdentityResolver {
                 PresenceStatus.SELF, // presenceStatus
                 null // engineRole - 기동 시점엔 아직 판정 전이라 항상 null, 응답 조립 시 EngineRoleService.getCurrentRole()로 덮어씀
         );
+
+        log.info("[EngineIdentityResolver] 자기 자신 식별 완료 - id = {}, host = {}, port = {}, priority = {}, expectedPeerCount = {}",
+                this.self.engineId(), this.self.host(), this.self.port(), this.self.priority(), engineProperties.expectedPeerCount());
     }
 }
