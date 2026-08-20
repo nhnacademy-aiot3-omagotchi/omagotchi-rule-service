@@ -6,8 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.AbstractNode;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
-import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
-import site.omagotchi.ruleservice.rule.domain.RuleCache;
 
 import java.util.Map;
 import java.util.Optional;
@@ -42,9 +40,8 @@ public class ThresholdRuleNode extends AbstractNode {
 
             log.info("[룰적중] {}:{} {} {}",
                     sensorReading.deviceEui(), sensorReading.measurement(), rule.operator(), rule.threshold());
-
-            QualityEvent qualityEvent = QualityEvent.from(sensorReading, QualityEvent.Type.RULE_HIT,
-                    "룰 적중: " + sensorReading.measurement() + " " + rule.operator() + " " + rule.threshold());
+            QualityEvent qualityEvent = QualityEvent.ruleHit(
+                    sensorReading, rule.operator().name(), rule.threshold());
             send("ruleHit",Message.of(sensorReading.traceId(), Map.of("qualityEvent",qualityEvent)));
         } else {
             send("out", message);
