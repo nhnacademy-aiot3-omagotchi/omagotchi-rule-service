@@ -86,7 +86,7 @@ public class InfluxInitializer implements ApplicationRunner {
             request.setStatus(TaskStatusType.ACTIVE);
 
             Task task = api.createTask(request);
-            log.info("Task 생성: {} (every {}, id={})", name, task.getId());
+            log.info("Task 생성: {} (id={})", name, task.getId());
         }catch (Exception e){
             log.warn("Task 생성 실패: {} : {}", name, e.getMessage());
         }
