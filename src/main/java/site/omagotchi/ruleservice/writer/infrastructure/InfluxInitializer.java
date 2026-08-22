@@ -6,6 +6,8 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.TasksApi;
 import com.influxdb.client.domain.BucketRetentionRules;
 import com.influxdb.client.domain.Task;
+import com.influxdb.client.domain.TaskCreateRequest;
+import com.influxdb.client.domain.TaskStatusType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -39,8 +41,8 @@ public class InfluxInitializer implements ApplicationRunner {
         createBucket(orgId, properties.buckets().avg1h(),  properties.retention().avg1hDays() *  24 * 3600);
         createBucket(orgId, properties.buckets().avg1d(), properties.retention().avg1dDays() * 24 * 3600);
 
-        createTask(orgId, DOWNSAMPLE_1H, FLUX_RESOURCE_1H, "1h");
-        createTask(orgId, DOWNSAMPLE_1D, FLUX_RESOURCE_1D, "1d");
+        createTask(orgId, DOWNSAMPLE_1H, FLUX_RESOURCE_1H);
+        createTask(orgId, DOWNSAMPLE_1D, FLUX_RESOURCE_1D);
 
     }
 
@@ -62,7 +64,7 @@ public class InfluxInitializer implements ApplicationRunner {
     }
 
     /** 태스크 생성. */
-    private void createTask(String orgId, String name, String fluxResource, String every){
+    private void createTask(String orgId, String name, String fluxResource){
         try{
             TasksApi api = client.getTasksApi();
 
@@ -73,8 +75,18 @@ public class InfluxInitializer implements ApplicationRunner {
             }
 
             String flux = resolveBuckets(loadResource(fluxResource));
-            Task task = api.createTaskEvery(name, flux, every, orgId);
-            log.info("Task 생성: {} (every {}, id={})", name, every, task.getId());
+            if (!flux.contains("name: \"" + name + "\"")) {
+                log.warn("Task 생성 건너뜀: {} — flux의 option task 이름과 불일치", name);
+                return;
+            }
+
+            TaskCreateRequest request = new TaskCreateRequest();
+            request.setOrgID(orgId);
+            request.setFlux(flux);
+            request.setStatus(TaskStatusType.ACTIVE);
+
+            Task task = api.createTask(request);
+            log.info("Task 생성: {} (every {}, id={})", name, task.getId());
         }catch (Exception e){
             log.warn("Task 생성 실패: {} : {}", name, e.getMessage());
         }

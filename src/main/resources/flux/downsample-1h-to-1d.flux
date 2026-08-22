@@ -2,6 +2,8 @@
 import "timezone"
 option location = timezone.location(name: "Asia/Seoul")
 
+option task = {name: "omagotchi-downsample-1d", every: 1d, offset: 15m}
+
 from(bucket: "${avg1hBucket}")
     |> range(start: -1d)
     |> filter(fn: (r) => r._field == "value")

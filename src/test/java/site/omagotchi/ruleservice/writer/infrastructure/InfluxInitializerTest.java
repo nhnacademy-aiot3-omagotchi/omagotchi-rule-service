@@ -15,6 +15,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
@@ -77,5 +78,32 @@ class InfluxInitializerTest {
         assertTrue(taskNames.containsAll(List.of(
                         "omagotchi-downsample-1h", "omagotchi-downsample-1d")),
                 "생성된 태스크: " + taskNames);
+    }
+
+    @Test
+    @DisplayName("태스크에 지각 데이터 흡수용 offset이 설정된다")
+    void createsTasksWithOffset() {
+        List<Task> tasks = client.getTasksApi().findTasks();
+
+        Task hourly = tasks.stream()
+                .filter(task -> "omagotchi-downsample-1h".equals(task.getName()))
+                .findFirst().orElseThrow();
+        Task daily = tasks.stream()
+                .filter(task -> "omagotchi-downsample-1d".equals(task.getName()))
+                .findFirst().orElseThrow();
+
+        assertEquals("5m", hourly.getOffset());
+        assertEquals("15m", daily.getOffset());
+    }
+
+    @Test
+    @DisplayName("일 집계는 한국 자정 기준으로 하루를 자른다")
+    void dailyTaskUsesSeoulTimezone() {
+        Task daily = client.getTasksApi().findTasks().stream()
+                .filter(task -> "omagotchi-downsample-1d".equals(task.getName()))
+                .findFirst().orElseThrow();
+
+        assertTrue(daily.getFlux().contains("Asia/Seoul"),
+                "일 집계 flux에 시간대 지정이 없습니다");
     }
 }
