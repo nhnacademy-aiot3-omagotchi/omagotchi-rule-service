@@ -51,6 +51,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
 
     private static final long ACTIVATION_RETRY_DELAY_MS = 3_000L; // 실패 시 한 번 재시도 할 때 사용
     static final long FAILBACK_CONFIRM_INTERVAL_MS = 5_000L;
+    static final long COLD_BOOT_RECHECK_MS = 1_500L;
 
     private final EngineDirectoryPort engineDirectoryPort;
     private final EngineProperties engineProperties;
@@ -154,6 +155,14 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         // 최초 역할 배정 - 플래핑 방지 대상이 아니므로 즉시 적용
         if (Objects.isNull(this.currentRole)) {
             this.applyRoleChange(judged);
+
+            // 상위 우선순위 피어가 없는데 STANDBY로 시작했다 == 이미 활동중인 하위 피어에게 양보한 것(judgeRole의 콜드부트 가드)
+            // 이 상태에서 피어에 변화가 없으면 onPresenceChanged() 알림이 안 와서 reconcile(30초)이 돌 때까지 승격이 밀림
+            // -> 짧게 뒤 재판정을 예약해서, 정규 failover 경로(grace 재확인)를 타고 제때 승격하게 함
+            if (judged == EngineRole.STANDBY && !this.hasHigherPriorityPeer()) {
+                this.taskScheduler.schedule(this::reevaluate, Instant.now(this.clock).plusMillis(COLD_BOOT_RECHECK_MS));
+            }
+
             return;
         }
 
@@ -196,6 +205,14 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
                 .filter(engineInfo -> isHigherPriority(engineInfo, myPriority, myId))
                 .anyMatch(engineInfo -> engineInfo.presenceStatus() == PresenceStatus.ONLINE
                         && engineInfo.engineRole() == EngineRole.ACTIVE);
+    }
+
+    private boolean hasHigherPriorityPeer() {
+        int myPriority = this.engineProperties.priority();
+        String myId = this.engineProperties.id();
+
+        return this.engineDirectoryPort.listEngines().stream()
+                .anyMatch(engineInfo -> isHigherPriority(engineInfo, myPriority, myId));
     }
 
     // grace 경과 후 재확인 - 그 사이 상위 우선순위 피어가 복귀했으면 judgeRole()이 다시 STANDBY로 나와 자동으로 무효화됨

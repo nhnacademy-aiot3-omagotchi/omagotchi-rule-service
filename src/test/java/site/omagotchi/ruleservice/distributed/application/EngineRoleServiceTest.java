@@ -554,6 +554,49 @@ class EngineRoleServiceTest {
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
     }
 
+    @Test
+    @DisplayName("콜드부트에서 활동 중인 하위 피어에게 양보했다면, reconcile(30초)을 기다리지 않고 곧 승격한다")
+    void promotesSoonAfterDeferringToActiveLowerPriorityPeerOnColdBoot() {
+        // 하위 우선순위 피어가 이미 액티브로 활동 중 - 상위 엔진이 재기동한 failback 상황
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-b", 2, PresenceStatus.ONLINE, EngineRole.ACTIVE)
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - 곧바로 뺏지 않고 스탠바이로 시작
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        // 최초 배정 직후 예약된 재판정 실행 - currentRole이 정해졌으니 이제 우선순위 규칙대로 액티브 판정
+        this.clock.advance(Duration.ofMillis(COLD_BOOT_RECHECK_MS));
+        this.runLastScheduledTask();
+
+        // 정규 failover 경로를 타므로 아직 스탠바이고, grace 재확인이 예약되 ㄴ상태
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        this.clock.advance(Duration.ofMillis(GRACE_MS));
+        this.runLastScheduledTask(); // confirmFailover 실행
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("동시 콜드부트(상위 피어도 아직 role 미정)로 STANDBY 배정됐다면, 조기 재판정을 예약하지 않는다")
+    void doesNotScheduleRecheckWhenDeferringToUnknownHigherPriorityPeerOnColdBoot() {
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.ONLINE, null) // 상위 피어지만 role 미정 - 상위 피어 존재
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate();
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+        verify(this.taskScheduler, never()).schedule(any(Runnable.class), any(Instant.class));
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */

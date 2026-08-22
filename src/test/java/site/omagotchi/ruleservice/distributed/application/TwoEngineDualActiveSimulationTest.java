@@ -73,7 +73,7 @@ class TwoEngineDualActiveSimulationTest {
     }
 
     @Test
-    @DisplayName("상위 엔진(A) 장애 -> B 승격 -> A 복구 -> 정기 reconcile로 우선순위 복원, 전 구간에서 정확히 하나만 ACTIVE로 수렴한다")
+    @DisplayName("상위 엔진(A) 장애 -> B 승격 -> A 복구 -> reconcile로 우선순위 복원(안전망 경로 검증), 전 구간에서 정확히 하나만 ACTIVE로 수렴한다")
     void failoverThenFailbackConvergesToExactlyOneActive() {
         // 1. 정상 기동 - A=ACTIVE, B=STANDBY 확립
         this.engineA.scheduleInitialEvaluation();
@@ -100,7 +100,8 @@ class TwoEngineDualActiveSimulationTest {
         assertThat(this.engineA.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
         assertThat(this.engineB.getCurrentRole()).isEqualTo(EngineRole.ACTIVE); // 이 구간에도 ACTIVE는 정확히 하나
 
-        // 4. 정기 reconcile이 재판정을 돌려 우선순위를 복원 - B는 그대로라 onPresenceChanged 알림이 오지 않으므로 이 경로가 없으면 A가 영영 STANDBY에 고착됨
+        // 4. reconcile이 재판정을 돌려 우선순위를 복원 - 실제로는 최초 배정 직후 예약되는 조기 재판정(COLD_BOOT_RECHECK_MS)이 주 경로이고,
+        // 여기서는 그 예약과 무관하게 reconcile 자체가 안전망으로도 똑같이 복원해내는지 직접 검증
         this.engineA.reconcile();
         this.scheduler.advanceTo(this.clock, this.clock.instant().plusMillis(GRACE_MS)); // failover 후보 -> grace 경과 후 승격
         assertThat(this.engineA.getCurrentRole()).isEqualTo(EngineRole.ACTIVE);
