@@ -71,7 +71,7 @@ public class FlowEngine {
 
         flowExecution.setWorkerThreads(workers);
         flowExecution.setFlowState(FlowState.RUNNING);
-        log.debug("[{}] 플로우 시작 - 소비 스레드 {}개", flowId, workers.size());
+        log.info("[{}] 플로우 시작 - 소비 스레드 {}개", flowId, workers.size());
     }
 
     private void consumeLoop(Wire wire) {
@@ -111,7 +111,7 @@ public class FlowEngine {
 
         flowExecution.setWorkerThreads(Collections.emptyList());
         flowExecution.setFlowState(FlowState.STOPPED);
-        log.debug("[{}] 플로우 정지 완료", flowId);
+        log.info("[{}] 플로우 정지 완료", flowId);
     }
 
     private void joinQuietly(Thread thread) {
