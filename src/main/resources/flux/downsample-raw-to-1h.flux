@@ -4,5 +4,5 @@ option task = {name: "omagotchi-downsample-1h", every: 1h, offset: 5m}
 from(bucket: "${rawBucket}")
     |> range(start: -1h)
     |> filter(fn: (r) => r._field == "value")
-    |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> aggregateWindow(every: 1h, fn: mean, timeSrc: "_start", createEmpty: false)
     |> to(bucket: "${avg1hBucket}")
