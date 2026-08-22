@@ -1,4 +1,6 @@
 // raw → 1시간 평균 (버킷 이름은 InfluxInitializer가 설정값으로 치환)
+option task = {name: "omagotchi-downsample-1h", every: 1h, offset: 5m}
+
 from(bucket: "${rawBucket}")
     |> range(start: -1h)
     |> filter(fn: (r) => r._field == "value")
