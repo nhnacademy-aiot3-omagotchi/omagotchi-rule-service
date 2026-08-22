@@ -23,6 +23,7 @@ class InfluxInitializerTest {
 
     private static final String ORG   = "omagotchi";
     private static final String TOKEN = "test-token";
+    private static InfluxDbProperties properties;
 
     @Container
     static InfluxDBContainer<?> influx =
@@ -44,7 +45,7 @@ class InfluxInitializerTest {
                 .getId();
 
         // initializer가 필요로 하는 값만 직접 구성
-        InfluxDbProperties properties = new InfluxDbProperties(
+        properties = new InfluxDbProperties(
                 influx.getUrl(), TOKEN, orgId,
                 new InfluxDbProperties.Buckets(
                         "omagotchi-raw", "omagotchi-avg-1h", "omagotchi-avg-1d"),
@@ -105,5 +106,25 @@ class InfluxInitializerTest {
 
         assertTrue(daily.getFlux().contains("Asia/Seoul"),
                 "일 집계 flux에 시간대 지정이 없습니다");
+    }
+
+    @Test
+    @DisplayName("flux 내용이 바뀌면 기존 태스크를 갱신한다")
+    void updatesTaskWhenFluxChanged() {
+        Task before = client.getTasksApi().findTasks().stream()
+                .filter(task -> "omagotchi-downsample-1h".equals(task.getName()))
+                .findFirst().orElseThrow();
+
+        // 서버 쪽 내용을 일부러 다르게 만든 뒤
+        before.setFlux(before.getFlux().replace("offset: 5m", "offset: 1m"));
+        client.getTasksApi().updateTask(before);
+
+        // 다시 기동하면 코드 내용으로 되돌아와야 한다
+        new InfluxInitializer(client, /* setUp과 같은 properties */ properties).run(null);
+
+        Task after = client.getTasksApi().findTasks().stream()
+                .filter(task -> "omagotchi-downsample-1h".equals(task.getName()))
+                .findFirst().orElseThrow();
+        assertEquals("5m", after.getOffset());
     }
 }

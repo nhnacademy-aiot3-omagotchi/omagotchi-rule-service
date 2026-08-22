@@ -68,16 +68,22 @@ public class InfluxInitializer implements ApplicationRunner {
         try{
             TasksApi api = client.getTasksApi();
 
-            for(Task task : api.findTasks()){
-                if(name.equals(task.getName())){
-                    return;
-                }
-            }
-
             String flux = resolveBuckets(loadResource(fluxResource));
             if (!flux.contains("name: \"" + name + "\"")) {
                 log.warn("Task 생성 건너뜀: {} — flux의 option task 이름과 불일치", name);
                 return;
+            }
+
+            for(Task task : api.findTasks()){
+                if(name.equals(task.getName())){
+                    if(flux.equals(task.getFlux())){
+                        return;
+                    }
+                    task.setFlux(flux);
+                    api.updateTask(task);
+                    log.info("Task 갱신: {} (id={})", name, task.getId());
+                    return;
+                }
             }
 
             TaskCreateRequest request = new TaskCreateRequest();
