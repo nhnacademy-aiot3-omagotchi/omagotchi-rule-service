@@ -144,7 +144,8 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             return;
         }
 
-        EngineRole judged = this.judgeRole();
+        List<EngineInfo> peers = this.engineDirectoryPort.listEngines();
+        EngineRole judged = this.judgeRole(peers);
 
         // 판정이 지금 롤이랑 같으면 할 것 없음 (기존과 동일)
         if (judged == this.currentRole) {
@@ -159,7 +160,8 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             // 상위 우선순위 피어가 없는데 STANDBY로 시작했다 == 이미 활동중인 하위 피어에게 양보한 것(judgeRole의 콜드부트 가드)
             // 이 상태에서 피어에 변화가 없으면 onPresenceChanged() 알림이 안 와서 reconcile(30초)이 돌 때까지 승격이 밀림
             // -> 짧게 뒤 재판정을 예약해서, 정규 failover 경로(grace 재확인)를 타고 제때 승격하게 함
-            if (judged == EngineRole.STANDBY && !this.hasHigherPriorityPeer()) {
+            // judgeRole()과 같은 스냅샷(peers)을 써야 함. 따로 조회하면 그 사이 디렉터리가 바뀌어 두 판단이 어긋날 수 있음
+            if (judged == EngineRole.STANDBY && !this.hasHigherPriorityPeer(peers)) {
                 this.taskScheduler.schedule(this::reevaluate, Instant.now(this.clock).plusMillis(COLD_BOOT_RECHECK_MS));
             }
 
@@ -207,12 +209,15 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
                         && engineInfo.engineRole() == EngineRole.ACTIVE);
     }
 
-    private boolean hasHigherPriorityPeer() {
+    // judgeRole()이 STANDBY로 판정할 때 근거로 삼는 상태(ONLINE/AUTH_FAILED)만 '상위 피어 있음'으로 침
+    // OFFLINE은 judgeRole()도 무시하므로 여기서도 무시해야 함. 안 그러면 OFFLINE으로 남은 상위 피어 잔상 때문에, 하위 피어에게 양보한 뒤의 조기 재판정 예약이 조용히 생략됨
+    private boolean hasHigherPriorityPeer(List<EngineInfo> peers) {
         int myPriority = this.engineProperties.priority();
         String myId = this.engineProperties.id();
 
-        return this.engineDirectoryPort.listEngines().stream()
-                .anyMatch(engineInfo -> isHigherPriority(engineInfo, myPriority, myId));
+        return peers.stream()
+                .anyMatch(engineInfo -> isHigherPriority(engineInfo, myPriority, myId)
+                        && engineInfo.presenceStatus() != PresenceStatus.OFFLINE);
     }
 
     // grace 경과 후 재확인 - 그 사이 상위 우선순위 피어가 복귀했으면 judgeRole()이 다시 STANDBY로 나와 자동으로 무효화됨
@@ -221,7 +226,7 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
             return; // 이미 다른 경로로 ACTIVE 전환됐으면 중복 실행 방지 (멱등)
         }
 
-        EngineRole judged = this.judgeRole(); // grace(1.5초) 지난 지금 시점에 다시 판정
+        EngineRole judged = this.judgeRole(this.engineDirectoryPort.listEngines()); // grace(1.5초) 지난 지금 시점에 다시 판정
 
         if (judged == EngineRole.ACTIVE) {
             this.applyRoleChange(judged); // grace(1.5초) 뒤에도 여전히 ACTIVE 판정 나면 그제서야 진짜 전환
@@ -236,11 +241,9 @@ public class EngineRoleService implements EnginePresenceListener, EngineActivePo
         this.applyRole(judged);
     }
 
-    private EngineRole judgeRole() {
+    private EngineRole judgeRole(List<EngineInfo> peers) {
         int myPriority = this.engineProperties.priority();
         String myId = this.engineProperties.id();
-
-        List<EngineInfo> peers = this.engineDirectoryPort.listEngines();
 
         List<EngineInfo> higherPriorityPeers = peers.stream()
                 .filter(engineInfo -> isHigherPriority(engineInfo, myPriority, myId))

@@ -605,6 +605,29 @@ class EngineRoleServiceTest {
         verify(this.taskScheduler, never()).schedule(any(Runnable.class), any(Instant.class));
     }
 
+    @Test
+    @DisplayName("콜드부트에서 상위 피어가 OFFLINE으로 남아있어도(무시 대상), 하위 피어에게 양보했다면 조기 재판정을 예약한다")
+    void promotesSoonWhenHigherPriorityPeerIsOfflineOnColdBoot() {
+        // 상위 피어(engine-0)는 OFFLINE - judgeRole()도 이를 무시하므로 재판정 여부 판단도 똑같이 무시해야 함
+        // 하위 피어(engine-b)가 이미 ACTIVE - 이것 때문에 STANDBY로 시작함
+        when(this.engineDirectoryPort.listEngines()).thenReturn(List.of(
+                peer("engine-0", 0, PresenceStatus.OFFLINE),
+                peer("engine-b", 2, PresenceStatus.ONLINE, EngineRole.ACTIVE)
+        ));
+
+        EngineRoleService engineRoleService = this.newService();
+        this.clock.advance(Duration.ofMillis(INITIAL_WAIT_MS));
+        engineRoleService.reevaluate(); // 최초 배정 - 하위 피어에게 양보해 스탠바이로 시작
+
+        assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
+
+        // OFFLINE인 상위 피어 때문에 재판정 예약이 생략되면 안 됨 - 예약됐는지 검증
+        ArgumentCaptor<Instant> scheduledAt = ArgumentCaptor.forClass(Instant.class);
+        verify(this.taskScheduler).schedule(any(Runnable.class), scheduledAt.capture());
+        assertThat(scheduledAt.getValue())
+                .isEqualTo(Instant.now(this.clock).plusMillis(COLD_BOOT_RECHECK_MS));
+    }
+
     /**
      * 가장 최근에 taskScheduler.schedule(...)로 예약된 작업을 직접 실행 (grace/히스테리시스 재확인 시뮬레이션)
      */
