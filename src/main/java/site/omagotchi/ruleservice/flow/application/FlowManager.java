@@ -190,7 +190,7 @@ public class FlowManager {
 
         flowEngine.unregister(flowId);
         flowEntries.remove(flowId);
-        log.debug("[{}] 플로우 제거 완료", flowId);
+        log.info("[{}] 플로우 제거 완료", flowId);
     }
 
     public Set<String> list() {
