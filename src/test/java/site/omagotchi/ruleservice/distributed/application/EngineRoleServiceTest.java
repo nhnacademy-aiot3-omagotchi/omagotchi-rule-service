@@ -568,11 +568,19 @@ class EngineRoleServiceTest {
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
 
+        // 예약 시각 자체가 COLD_BOOT_RECHECK_MS인지 검증
+        // 운영 코드가 엉뚱한 지연으로 예약해도 runLastScheduledTask()는 무조건 실행하므로 이 assertion 없이는 못 잡음
+        ArgumentCaptor<Instant> scheduledAt = ArgumentCaptor.forClass(Instant.class);
+
+        verify(this.taskScheduler).schedule(any(Runnable.class), scheduledAt.capture());
+        assertThat(scheduledAt.getValue())
+                .isEqualTo(Instant.now(this.clock).plusMillis(COLD_BOOT_RECHECK_MS));
+
         // 최초 배정 직후 예약된 재판정 실행 - currentRole이 정해졌으니 이제 우선순위 규칙대로 액티브 판정
         this.clock.advance(Duration.ofMillis(COLD_BOOT_RECHECK_MS));
         this.runLastScheduledTask();
 
-        // 정규 failover 경로를 타므로 아직 스탠바이고, grace 재확인이 예약되 ㄴ상태
+        // 정규 failover 경로를 타므로 아직 스탠바이고, grace 재확인이 예약된 상태
 
         assertThat(engineRoleService.getCurrentRole()).isEqualTo(EngineRole.STANDBY);
 
