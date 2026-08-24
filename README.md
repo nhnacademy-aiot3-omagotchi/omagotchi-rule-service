@@ -19,6 +19,8 @@ MQTT → 정규화 → 품질 검사·룰 평가 → RabbitMQ → InfluxDB
 ```
 
 - 초기 룰 적재: Learning Service HTTP 조회
+- 룰 조회 경로: `GET /api/v1/internal/threshold-rules`
+- 룰 조회 인증: Rule–Learning 관계 전용 HTTP Basic Credential
 - 룰 변경 반영: RabbitMQ Fanout 이벤트
 - 룰 누락 보정: 5분 주기 전체 재동기화
 - 추적 식별자: HTTP `requestId`, 파이프라인 `traceId`
@@ -73,6 +75,7 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 ### 운영 필수 설정
 
 - 애플리케이션: `SERVER_PORT`, `CORE_BASE_URL`
+- Learning 조회 인증: `RULE_LEARNING_USERNAME`, `RULE_LEARNING_PASSWORD`
 - 엔진 식별: `ENGINE_ID`, `ENGINE_PRIORITY`
 - 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0) 
 - 엔진 간 내부 통신: `INTERNAL_SHARED_SECRET`
