@@ -48,7 +48,7 @@ class RestClientConfigTest {
     void attachesLearningCredentialToEveryRequest() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        CoreClientProperties properties = new CoreClientProperties(
+        LearningClientProperties properties = new LearningClientProperties(
                 "http://learning-service:8080",
                 LEARNING_USERNAME,
                 LEARNING_PASSWORD

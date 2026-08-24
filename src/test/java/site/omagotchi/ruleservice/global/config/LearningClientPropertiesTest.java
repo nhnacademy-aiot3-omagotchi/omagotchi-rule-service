@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.BDDAssertions.then;
 
-class CoreClientPropertiesTest {
+class LearningClientPropertiesTest {
 
     private static final String VALID_PASSWORD = "test-only-rule-learning-password";
 
@@ -22,13 +22,14 @@ class CoreClientPropertiesTest {
     void bindsValidPropertiesAndRedactsCredential() {
         contextRunner
                 .withPropertyValues(
-                        "core.base-url=http://localhost:8084",
-                        "core.username=rule-service",
-                        "core.password=" + VALID_PASSWORD
+                        "learning.base-url=http://localhost:8084",
+                        "learning.username=rule-service",
+                        "learning.password=" + VALID_PASSWORD
                 )
                 .run(context -> {
                     then(context).hasNotFailed();
-                    CoreClientProperties properties = context.getBean(CoreClientProperties.class);
+                    LearningClientProperties properties =
+                            context.getBean(LearningClientProperties.class);
                     then(properties.baseUrl()).isEqualTo("http://localhost:8084");
                     then(properties.username()).isEqualTo("rule-service");
                     then(properties.password()).isEqualTo(VALID_PASSWORD);
@@ -42,11 +43,11 @@ class CoreClientPropertiesTest {
     @DisplayName("Learning Client Credential 누락의 기동 실패")
     void rejectsMissingCredential() {
         contextRunner
-                .withPropertyValues("core.base-url=http://localhost:8084")
+                .withPropertyValues("learning.base-url=http://localhost:8084")
                 .run(context -> then(context.getStartupFailure())
                         .isNotNull()
-                        .hasStackTraceContaining("core.username은 비어 있을 수 없습니다.")
-                        .hasStackTraceContaining("core.password는 비어 있을 수 없습니다."));
+                        .hasStackTraceContaining("learning.username은 비어 있을 수 없습니다.")
+                        .hasStackTraceContaining("learning.password는 비어 있을 수 없습니다."));
     }
 
     @ParameterizedTest
@@ -55,14 +56,14 @@ class CoreClientPropertiesTest {
     void rejectsInvalidPasswordLength(int length) {
         contextRunner
                 .withPropertyValues(
-                        "core.base-url=http://localhost:8084",
-                        "core.username=rule-service",
-                        "core.password=" + "a".repeat(length)
+                        "learning.base-url=http://localhost:8084",
+                        "learning.username=rule-service",
+                        "learning.password=" + "a".repeat(length)
                 )
                 .run(context -> then(context.getStartupFailure())
                         .isNotNull()
                         .hasStackTraceContaining(
-                                "core.password는 32자 이상 72자 이하여야 합니다."
+                                "learning.password는 32자 이상 72자 이하여야 합니다."
                         ));
     }
 
@@ -71,20 +72,20 @@ class CoreClientPropertiesTest {
     void rejectsInvalidCredentialCharacters() {
         contextRunner
                 .withPropertyValues(
-                        "core.base-url=http://localhost:8084",
-                        "core.username=rule:service",
-                        "core.password=" + "a".repeat(31) + "+"
+                        "learning.base-url=http://localhost:8084",
+                        "learning.username=rule:service",
+                        "learning.password=" + "a".repeat(31) + "+"
                 )
                 .run(context -> then(context.getStartupFailure())
                         .isNotNull()
-                        .hasStackTraceContaining("core.username에는 ':'를 사용할 수 없습니다.")
+                        .hasStackTraceContaining("learning.username에는 ':'를 사용할 수 없습니다.")
                         .hasStackTraceContaining(
-                                "core.password는 영문자·숫자·'-'·'_'만 사용할 수 있습니다."
+                                "learning.password는 영문자·숫자·'-'·'_'만 사용할 수 있습니다."
                         ));
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties(CoreClientProperties.class)
+    @EnableConfigurationProperties(LearningClientProperties.class)
     static class PropertiesConfig {
     }
 }

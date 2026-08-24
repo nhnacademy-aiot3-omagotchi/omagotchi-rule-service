@@ -28,9 +28,9 @@ spring:
     password: ${RABBITMQ_PASSWORD}
     publisher-confirm-type: correlated
 
-# RestClientConfig에서 Core API
-core:
-  base-url: ${CORE_BASE_URL}
+# RestClientConfig에서 Learning API
+learning:
+  base-url: ${LEARNING_BASE_URL}
   username: ${RULE_LEARNING_USERNAME}
   password: ${RULE_LEARNING_PASSWORD}
 

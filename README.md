@@ -74,7 +74,7 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 
 ### 운영 필수 설정
 
-- 애플리케이션: `SERVER_PORT`, `CORE_BASE_URL`
+- 애플리케이션: `SERVER_PORT`, `LEARNING_BASE_URL`
 - Learning 조회 인증: `RULE_LEARNING_USERNAME`, `RULE_LEARNING_PASSWORD`
 - 엔진 식별: `ENGINE_ID`, `ENGINE_PRIORITY`
 - 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0) 

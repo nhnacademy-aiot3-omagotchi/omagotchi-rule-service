@@ -55,10 +55,10 @@ public class InMemoryRuleCache implements RuleCache {
      * 단일 등록 시 최신 버전이 아니라면 false를 반환하므로 count는 갱신된 룰의 갯수만큼 증가
      */
     @Override
-    public synchronized int replaceAll(Collection<ThresholdRule> coreRules) {
+    public synchronized int replaceAll(Collection<ThresholdRule> learningRules) {
         int count = 0;
 
-        for (ThresholdRule rule : coreRules) {
+        for (ThresholdRule rule : learningRules) {
             if (apply(rule)) {
                 count++;
             }
