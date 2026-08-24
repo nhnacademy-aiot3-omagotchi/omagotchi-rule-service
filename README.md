@@ -19,6 +19,8 @@ MQTT → 정규화 → 품질 검사·룰 평가 → RabbitMQ → InfluxDB
 ```
 
 - 초기 룰 적재: Learning Service HTTP 조회
+- 룰 조회 경로: `GET /api/v1/internal/threshold-rules`
+- 룰 조회 인증: Rule–Learning 관계 전용 HTTP Basic Credential
 - 룰 변경 반영: RabbitMQ Fanout 이벤트
 - 룰 누락 보정: 5분 주기 전체 재동기화
 - 추적 식별자: HTTP `requestId`, 파이프라인 `traceId`
@@ -38,17 +40,21 @@ cp .env.local.example .env.local
 SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 ```
 
-> **기존에 `.env.local`을 쓰고 있었다면 아래 3개 키를 반드시 추가해야 합니다.**
-> 없으면 `Could not resolve placeholder 'ENGINE_ID'`로 **기동 자체가 실패합니다.**
-> (`EUREKA_ENABLED=false`여도 항상 바인딩되므로 단일 엔진으로 쓰더라도 필요합니다.)
+> **기존 `.env.local` 사용 시 아래 6개 설정 추가 필요**
 >
 > ```dotenv
+> LEARNING_BASE_URL=http://localhost:8084
+> RULE_LEARNING_USERNAME=rule-service
+> RULE_LEARNING_PASSWORD=local-only-change-this-rule-password
 > ENGINE_ID=engine-a
 > ENGINE_PRIORITY=1
 > INTERNAL_SHARED_SECRET=dummy
 > ```
 >
-> 기본값을 주지 않는 건 의도된 설계입니다 — 두 엔진이 같은 `ENGINE_ID`로 뜨면 서로를 자기 자신으로 오인해 둘 다 ACTIVE가 되는 사고가 나므로, 누락을 기동 시점에 바로 잡습니다.
+> - 설정 누락: Placeholder 해석 실패에 따른 기동 중단
+> - Learning Credential: Learning Service의 `.env.local`과 동일한 값 사용
+> - 엔진 설정: `EUREKA_ENABLED=false`인 단일 엔진에서도 필수
+> - 엔진 식별값 기본값 미제공: 중복 `ENGINE_ID`에 따른 이중 ACTIVE 방지
 
 - 기본 주소: <http://localhost:8081>
 - 상태 확인: <http://localhost:8081/actuator/health>
@@ -72,7 +78,8 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 
 ### 운영 필수 설정
 
-- 애플리케이션: `SERVER_PORT`, `CORE_BASE_URL`
+- 애플리케이션: `SERVER_PORT`, `LEARNING_BASE_URL`
+- Learning 조회 인증: `RULE_LEARNING_USERNAME`, `RULE_LEARNING_PASSWORD`
 - 엔진 식별: `ENGINE_ID`, `ENGINE_PRIORITY`
 - 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0) 
 - 엔진 간 내부 통신: `INTERNAL_SHARED_SECRET`

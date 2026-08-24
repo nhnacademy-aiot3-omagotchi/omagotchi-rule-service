@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "eureka.client.enabled=true",
         "eureka.client.register-with-eureka=false",
         "eureka.client.fetch-registry=false",
-        "core.base-url=temp",
+        "learning.base-url=temp",
         "engine.id=test-engine",
         "engine.priority=1"
 })

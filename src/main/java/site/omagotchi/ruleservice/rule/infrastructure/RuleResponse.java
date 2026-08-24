@@ -6,7 +6,7 @@ import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import java.util.Objects;
 
 /**
- * GET /api/버전/threshold-rules 응답 바디 */
+ * GET /api/v1/internal/threshold-rules 응답 바디 */
 public record RuleResponse(
         Long ruleId,
         String deviceEui,

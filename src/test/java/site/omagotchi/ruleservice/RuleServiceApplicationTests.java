@@ -10,7 +10,7 @@ import site.omagotchi.ruleservice.global.security.TestJwtKeyConfig;
 @ActiveProfiles("test")
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
-        "core.base-url=temp",
+        "learning.base-url=temp",
         "engine.id=test-engine",
         "engine.priority=1"
 })

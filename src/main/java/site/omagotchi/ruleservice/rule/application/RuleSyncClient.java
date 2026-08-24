@@ -63,7 +63,7 @@ public class RuleSyncClient {
 
     /**
      * 데몬 스레드가 처리할 작업. SyncState에 따라 캐싱작업 시작 <br/>
-     * 1. core에서 센서 룰 목록을 가져오고 캐시 적재(최신 룰만 갱신됨) <br/>
+     * 1. Learning에서 센서 룰 목록을 가져오고 캐시 적재(최신 룰만 갱신됨) <br/>
      * 2. 만약 요청이 실패한다면 5-10-20-40-60(max)초 간격으로 계속 시도
      */
     private void initialSyncWithRetry() {
@@ -84,7 +84,7 @@ public class RuleSyncClient {
                 }
 
             } catch (Exception e) {
-                log.warn("Core 연결 실패. 룰 미적용 - {}초 후 재시도", backOff, e);
+                log.warn("Learning 연결 실패. 룰 미적용 - {}초 후 재시도", backOff, e);
                 sleep(backOff);
                 backOff = Math.min(backOff * 2, 60);
             } finally {
@@ -95,7 +95,7 @@ public class RuleSyncClient {
 
     /**
      * 룰 재동기화 스케줄러 <br/>
-     * 5분 단위로 계속 core에서 센서 룰을 가져와서 현재 캐시에 적재. <br/>
+     * 5분 단위로 계속 Learning에서 센서 룰을 가져와서 현재 캐시에 적재. <br/>
      * RabbitMQ에서 문제가 생겨 변경 룰을 불러오지못하는 등의 상황에 대비.
      */
     @Scheduled(fixedDelay = 5, timeUnit = TimeUnit.MINUTES)
@@ -122,7 +122,7 @@ public class RuleSyncClient {
     }
 
     /**
-     * restClient를 통해서 core에서 센서 룰을 가져옴
+     * RestClient를 통해 Learning에서 센서 룰을 가져옴
      */
     private List<ThresholdRule> fetchAll() {
 
@@ -130,7 +130,8 @@ public class RuleSyncClient {
         // 나중에 fetchAll()의 호출부가 새로 생겼을 때 그곳에서 MDC 세팅을 깜빡하고 안 하면, MDC.get(...)가 null 리턴하고, X-Request-ID에 null이 들어가버릴 수 있음
         String requestId = MDC.get(MDC_REQUEST_ID_KEY);
 
-        RestClient.RequestHeadersSpec<?> spec = restClient.get().uri("/api/v1/threshold-rules");
+        RestClient.RequestHeadersSpec<?> spec = restClient.get()
+                .uri("/api/v1/internal/threshold-rules");
 
         // requestId가 null이면 헤더를 아예 안 붙이도록 방어
         if (Objects.nonNull(requestId)) {
