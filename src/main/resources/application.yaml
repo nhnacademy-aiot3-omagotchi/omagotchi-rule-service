@@ -1,21 +1,60 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT}
 
 spring:
+  task:
+    scheduling:
+      pool:
+        # 1개가 원래 기본값. pollPeers(1초 주기)/reSync(5분 주기)/EngineRoleService 단발 타이머들이 공유하므로, reSync가 지연돼도 failover 타이머가 밀리지 않도록 여유 확보
+        size: 4
   application:
     name: rule-service
+  rabbitmq:
+    # 아래 listener/publisher 설정은 환경 설정이 아니라 앱 동작의 전제조건이라 base에 둠
+    # - default-requeue-rejected=false: poison 메시지가 재큐잉되지 않고 DLQ(파킹 큐)로 가는 조건
+    # - publisher-confirm-type=correlated: PublishRetryBuffer의 발행 확인 콜백이 동작하는 조건
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 3
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    publisher-confirm-type: correlated
+
+# RestClientConfig에서 Learning API
+learning:
+  base-url: ${LEARNING_BASE_URL}
+  username: ${RULE_LEARNING_USERNAME}
+  password: ${RULE_LEARNING_PASSWORD}
 
 eureka:
   client:
+    enabled: ${EUREKA_ENABLED}
     register-with-eureka: true
     fetch-registry: true
     healthcheck:
       enabled: true
     serviceUrl:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_URL}
+    # filter-only-up-instances: false는 환경 설정이 아니라, 앱 동작의 전제조건임
+    # true(Eureka 기본값)로 되돌리면, Eureka가 getInstances()에서 DOWN 처리된 인스턴스는 리턴 목록에 포함 안 함
+    # RabbitMQ 등 헬스체크 대상이 잠깐만 죽어도(또는 재기동 직후/신규 엔진처럼 knownEngines가 아직 비어 있는 순간) 피어가 목록에서 서로를 발견 못 하고 둘 다 ACTIVE로 판정될 수 있음
+    # (스플릿 브레인 위험 - 이 값을 정리하지 말 것)
+    filter-only-up-instances: false
+    registry-fetch-interval-seconds: 5
 
   instance:
     prefer-ip-address: true
+    metadata-map:
+      engine-id: ${ENGINE_ID}
+      engine-priority: ${ENGINE_PRIORITY}
 
 management:
   endpoints:
@@ -24,6 +63,105 @@ management:
         include:
           - health
           - info
+          - metrics
   endpoint:
     health:
       show-details: never
+
+auth:
+  jwt:
+    issuer: ${JWT_ISSUER}
+    audience: ${JWT_AUDIENCE}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+
+sensor:
+  broker-url: ${SENSOR_BROKER_URL}
+  client-id: ${SENSOR_CLIENT_ID}
+  # Broker가 익명 연결을 허용하면 비워 둘 수 있음
+  username: ${SENSOR_USERNAME:}
+  password: ${SENSOR_PASSWORD:}
+
+influx:
+  url: ${INFLUXDB_URL}
+  token: ${INFLUXDB_TOKEN}
+  org: ${INFLUXDB_ORG_ID}
+  buckets:
+    raw: omagotchi-raw
+    avg-1h: omagotchi-avg-1h
+    avg-1d: omagotchi-avg-1d
+  retention:
+    raw-days: 7
+    avg-1h-days: 365
+    avg-1d-days: 0
+
+# 이 프로세스 내부에서만 쓰이는 값 (@ConfigurationProperties(prefix = "engine")
+engine:
+  id: ${ENGINE_ID}
+  priority: ${ENGINE_PRIORITY}
+  # 정상 상태에서 발견해야 하는 본인 이외의 엔진 수 (이중화 A/B 구성이면 1)
+  # 의도적으로 단일 엔진으로 내릴 때는 0으로 낮춰야 topology가 계속 DEGRADED로 남지 않음 (기본값 1로 설정하였음)
+  expected-peer-count: ${ENGINE_EXPECTED_PEER_COUNT:1}
+
+quality:
+  ranges:
+    temperature:
+      min: -20
+      max: 60
+    humidity:
+      min: 0
+      max: 100
+    co2:
+      min: 300
+      max: 5000
+    pressure:
+      min: 800
+      max: 1100
+    tvoc:
+      min: 0
+      max: 60000
+    illumination:
+      min: 0
+      # max 없음 (상한 없음 → Double max가 null이 됨)
+    battery:
+      min: 0
+      max: 100
+    door:
+      min: 0
+      max: 1
+
+  inventory:
+    - deviceEui: "24e124126d152862"
+      measurement: "temperature"
+      expectedIntervalSeconds: 120
+    - deviceEui: "24e124126d152590"
+      measurement: "temperature"
+      expectedIntervalSeconds: 60
+    - deviceEui: "24e124128c067999"
+      measurement: "temperature"
+      expectedIntervalSeconds: 60
+    - deviceEui: "24e124128c140101"
+      measurement: "temperature"
+      expectedIntervalSeconds: 600
+    - deviceEui: "24e124136d151836"
+      measurement: "temperature"
+      expectedIntervalSeconds: 60
+    - deviceEui: "24e124725d081175"
+      measurement: "temperature"
+      expectedIntervalSeconds: 60
+    - deviceEui: "24e124785c389010"
+      measurement: "temperature"
+      expectedIntervalSeconds: 60
+    - deviceEui: "24e124725d089152"
+      measurement: "temperature"
+      expectedIntervalSeconds: 600
+
+
+# 로그 패턴에 두 MDC값 모두 노출
+# requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.
+# 한 쪽만 있는 로그 줄에서는 나머지 하나가 빈 문자열로 나옴 (:- 뒤가 기본값)
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [requestId=%X{requestId:-}] [traceId=%X{traceId:-}] %m%n%wEx"
+
+internal:
+  shared-secret: ${INTERNAL_SHARED_SECRET}

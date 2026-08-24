@@ -1,0 +1,12 @@
+### 전체 합산
+GET http://localhost:8081/actuator/metrics/mqtt.messages.received
+
+### /self
+GET http://localhost:8081/api/v1/engines/self
+
+### 내부 API - engine-b의 self 조회 (성공, 올바른 시크릿)
+GET http://localhost:8082/api/v1/internal/engines/self
+X-Internal-Token: <INTERNAL_SHARED_SECRET을 여기에 입력>
+
+### 내부 API - engine-b의 self 조회 (실패, 시크릿 누락 -> 401)
+GET http://localhost:8082/api/v1/internal/engines/self
