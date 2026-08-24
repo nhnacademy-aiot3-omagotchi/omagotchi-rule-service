@@ -7,6 +7,8 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.global.security.InternalAuthHeader;
 
+import java.nio.charset.StandardCharsets;
+
 @Configuration
 public class RestClientConfig {
 
@@ -21,10 +23,12 @@ public class RestClientConfig {
         factory.setConnectTimeout(1_000); // 연결 타임아웃 1초
         factory.setReadTimeout(3_000); // 읽기 타임아웃 3초 (learning-service API가 행에 걸려도 스케줄러 스레드를 무기한 점유하지 않도록)
 
-        return RestClient.builder()
-                .baseUrl(properties.baseUrl())
-                .requestFactory(factory)
-                .build();
+        return applyLearningAuth(
+                RestClient.builder()
+                        .baseUrl(properties.baseUrl())
+                        .requestFactory(factory),
+                properties
+        ).build();
     }
 
     /**
@@ -50,5 +54,19 @@ public class RestClientConfig {
      */
     public static RestClient.Builder applyInternalAuth(RestClient.Builder builder, String sharedSecret) {
         return builder.defaultHeader(InternalAuthHeader.NAME, sharedSecret);
+    }
+
+    /**
+     * Learning 임계치 기준 조회에 Rule–Learning 관계 전용 Basic Credential을 부착.
+     */
+    public static RestClient.Builder applyLearningAuth(
+            RestClient.Builder builder,
+            CoreClientProperties properties
+    ) {
+        return builder.defaultHeaders(headers -> headers.setBasicAuth(
+                properties.username(),
+                properties.password(),
+                StandardCharsets.UTF_8
+        ));
     }
 }

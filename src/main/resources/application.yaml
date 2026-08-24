@@ -31,6 +31,8 @@ spring:
 # RestClientConfig에서 Core API
 core:
   base-url: ${CORE_BASE_URL}
+  username: ${RULE_LEARNING_USERNAME}
+  password: ${RULE_LEARNING_PASSWORD}
 
 eureka:
   client:

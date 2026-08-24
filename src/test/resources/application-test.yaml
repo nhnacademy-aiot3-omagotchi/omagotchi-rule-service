@@ -20,6 +20,8 @@ spring:
 
 core:
   base-url: http://localhost:8084
+  username: rule-service
+  password: test-only-rule-learning-password
 
 auth:
   jwt:
