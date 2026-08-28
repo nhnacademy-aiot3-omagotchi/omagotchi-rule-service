@@ -18,7 +18,7 @@ class MessageTest {
 
         assertThat(message.getId()).isNotBlank();
         assertThat(message.getTraceId()).isNotBlank();
-        assertThat(message.getTimestamp()).isGreaterThan(0);
+        assertThat(message.getTimestamp()).isPositive();
     }
 
     @Test
