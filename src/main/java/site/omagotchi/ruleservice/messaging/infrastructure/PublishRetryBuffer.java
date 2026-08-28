@@ -18,19 +18,20 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * RabbitMQ에 발행을 실패했을 경우 적재/재발행. <br/><br/>
  * 1. RabbitPublishNode에서 발행과정에서 Exception이 발생한 경우 <br/>
- * 2. RabbitPublishNode에서 발행은 성공했지만 RabbitMQ 브로커에서 문제가 발생한 경우*/
+ * 2. RabbitPublishNode에서 발행은 성공했지만 RabbitMQ 브로커에서 문제가 발생한 경우
+ */
 @Slf4j
 @Component
 public class PublishRetryBuffer implements SmartLifecycle {
-    private static final int  DEFAULT_CAPACITY = 100_000;
-    private static final long MIN_BACKOFF_MS   = 200;
-    private static final long MAX_BACKOFF_MS   = 30_000;
-    private static final long IDLE_SLEEP_MS    = 200;
+    private static final int DEFAULT_CAPACITY = 100_000;
+    private static final long MIN_BACKOFF_MS = 200;
+    private static final long MAX_BACKOFF_MS = 30_000;
+    private static final long IDLE_SLEEP_MS = 200;
 
     private final int capacity;
 
     private final BlockingQueue<PendingMessage> qualityQ = new LinkedBlockingQueue<>();
-    private final BlockingQueue<PendingMessage> rawQ     = new LinkedBlockingQueue<>();
+    private final BlockingQueue<PendingMessage> rawQ = new LinkedBlockingQueue<>();
 
     private final AtomicLong droppedCount = new AtomicLong();
 
@@ -43,16 +44,18 @@ public class PublishRetryBuffer implements SmartLifecycle {
 
 
     @Autowired
-    public PublishRetryBuffer(RabbitTemplate rabbitTemplate, MeterRegistry registry){
+    public PublishRetryBuffer(RabbitTemplate rabbitTemplate, MeterRegistry registry) {
         this(rabbitTemplate, DEFAULT_CAPACITY, registry);
     }
 
-    /** 테스트/튜닝용 - 버퍼 상한을 지정하여 생성 */
-    public PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity){
+    /**
+     * 테스트/튜닝용 - 버퍼 상한을 지정하여 생성
+     */
+    public PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity) {
         this(rabbitTemplate, capacity, new SimpleMeterRegistry());
     }
 
-    private PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity, MeterRegistry registry){
+    private PublishRetryBuffer(RabbitTemplate rabbitTemplate, int capacity, MeterRegistry registry) {
         this.rabbitTemplate = rabbitTemplate;
         this.capacity = capacity;
         this.publishConfirmed = registry.counter("rabbitmq.publish.confirmed");
@@ -63,15 +66,16 @@ public class PublishRetryBuffer implements SmartLifecycle {
      * 메세지 적재 메서드. <br/>
      * 전체 버퍼 크기 (Capacity)가 이미 꽉찬 경우를 고려해 오래된 메시지는 그냥 버림.<br/>
      * 단, 품질 메시지를 더 중요하게 가중치를 둬 raw부터 버림.
+     *
      * @param pm 원래 RabbitMq에 보내려고했던 메세지에 대한 정보
      */
     public synchronized void offer(PendingMessage pm) {
-        if (pm == null){
+        if (pm == null) {
             return;
         }
         while (rawQ.size() + qualityQ.size() >= capacity) {
             PendingMessage victim = rawQ.poll();
-            if (victim == null){
+            if (victim == null) {
                 victim = qualityQ.poll();
             }
             if (victim != null) {
@@ -80,11 +84,17 @@ public class PublishRetryBuffer implements SmartLifecycle {
             }
         }
         BlockingQueue<PendingMessage> q = (pm.mode() == PublishMode.QUALITY) ? qualityQ : rawQ;
-        q.offer(pm);
+        if (!q.offer(pm)) {
+            droppedCount.incrementAndGet();
+            log.error("버퍼 적재 실패 → 폐기(누적 {}건): key={}", droppedCount.get(), pm.routingKey());
+        }
     }
 
     //재발행 작업
-    /** 앱 구동시 데몬 스레드를 하나 만들어 재발행 작업 시작*/
+
+    /**
+     * 앱 구동시 데몬 스레드를 하나 만들어 재발행 작업 시작
+     */
     @Override
     public void start() {
         running = true;
@@ -124,7 +134,7 @@ public class PublishRetryBuffer implements SmartLifecycle {
                     m -> {
                         m.getMessageProperties().setHeader("traceId", pm.traceId());
                         return m;
-                        },
+                    },
                     new PendingCorrelationData(pm)
             );
             return true;
@@ -139,12 +149,17 @@ public class PublishRetryBuffer implements SmartLifecycle {
     }
 
     private void sleep(long ms) {
-        try { Thread.sleep(ms); }
-        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
 
-    /** 콜백 설정. 브로커가 nack응답을 할때 다시 버퍼에 재적재 및 재발행 시도*/
+    /**
+     * 콜백 설정. 브로커가 nack응답을 할때 다시 버퍼에 재적재 및 재발행 시도
+     */
     @PostConstruct
     public void registerConfirmCallback() {
         rabbitTemplate.setConfirmCallback(
@@ -160,12 +175,15 @@ public class PublishRetryBuffer implements SmartLifecycle {
                     } else {
                         log.error("발행 nack인데 복구 정보 없음(CorrelationData 미부착). cause={}", cause);
                     }
-        });
+                });
     }
 
 
     //중단 작업
-    /** 앱종료시 호출 됨 큐에 남아있는 메세지를 종료 전에 재발행 시도후 스레드 종료*/
+
+    /**
+     * 앱종료시 호출 됨 큐에 남아있는 메세지를 종료 전에 재발행 시도후 스레드 종료
+     */
     @Override
     public void stop() {
         running = false;
@@ -195,11 +213,11 @@ public class PublishRetryBuffer implements SmartLifecycle {
         return droppedCount.get();
     }
 
-    public int getQualityQSize(){
+    public int getQualityQSize() {
         return qualityQ.size();
     }
 
-    public int getRawQSize(){
+    public int getRawQSize() {
         return rawQ.size();
     }
 }
