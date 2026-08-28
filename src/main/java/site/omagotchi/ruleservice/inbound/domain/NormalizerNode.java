@@ -12,7 +12,6 @@ import site.omagotchi.ruleservice.quality.domain.QualityEvent;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -105,9 +104,7 @@ public class NormalizerNode extends AbstractNode {
             }
 
             //object 순회 - measurement마다 SensorReading 생성
-            Iterator<Map.Entry<String, JsonNode>> fields = object.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
+            for (Map.Entry<String, JsonNode> field : object.properties()) {
                 String measurement = field.getKey();
                 JsonNode valueNode = field.getValue();
 
@@ -128,7 +125,7 @@ public class NormalizerNode extends AbstractNode {
 
                 //SensorReading 조립
                 SensorReading sensorReading = new SensorReading(message.getTraceId(), location, point, deviceEui,
-                        measurement,value, measuredAt, receivedAt, deviceName, fCnt);
+                        measurement, value, measuredAt, receivedAt, deviceName, fCnt);
                 //수신 기록
                 lastSeenRegistry.update(deviceEui, measurement, receivedAt);
 
