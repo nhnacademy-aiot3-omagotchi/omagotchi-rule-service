@@ -1,12 +1,5 @@
 package site.omagotchi.ruleservice.inbound.domain;
 
-import site.omagotchi.ruleservice.inbound.domain.NormalizerNode;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +8,12 @@ import site.omagotchi.ruleservice.flow.domain.Flow;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.CollectorNode;
 import site.omagotchi.ruleservice.quality.domain.LastSeenRegistry;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * MQTT 브로커 없이 normalizer -> collector 파이프라인을 실제 FlowEngine 위에서 돌려,
@@ -41,7 +40,7 @@ class InboundPipelineTest {
     void traceIdPropagatesThroughNormalizeAndCollect() throws InterruptedException {
         // given: normalizer -> collector 배선 후 엔진 시작
         LastSeenRegistry lastSeenRegistry = new LastSeenRegistry();
-        NormalizerNode normalizer = new NormalizerNode("normalizer",lastSeenRegistry);
+        NormalizerNode normalizer = new NormalizerNode("normalizer", lastSeenRegistry);
         CollectorNode collector = new CollectorNode("collector");
 
         Flow flow = new Flow(FLOW_ID);

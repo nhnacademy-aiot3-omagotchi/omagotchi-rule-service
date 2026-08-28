@@ -2,7 +2,6 @@ package site.omagotchi.ruleservice.flow.domain.port;
 
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.Node;
-import site.omagotchi.ruleservice.flow.domain.port.InputPort;
 
 import java.util.Objects;
 

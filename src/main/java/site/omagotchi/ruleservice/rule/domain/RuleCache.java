@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.rule.domain;
 
-import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
-
 import java.util.Collection;
 import java.util.Optional;
 
