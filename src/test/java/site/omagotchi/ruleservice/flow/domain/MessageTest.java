@@ -57,8 +57,9 @@ class MessageTest {
     @DisplayName("payload는 불변이라 직접 수정하면 UnsupportedOperationException 발생한다")
     void payloadIsImmutable() {
         Message message = Message.of(Map.of("value", 27.9));
+        Map<String, Object> payload = message.getPayload();
 
-        assertThatThrownBy(() -> message.getPayload().put("new", "value"))
+        assertThatThrownBy(() -> payload.put("new", "value"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -151,10 +152,12 @@ class MessageTest {
     @Test
     @DisplayName("Message.of(traceId, payload)에서 traceId가 null이거나 비어있으면 IllegalArgumentException 던진다")
     void ofWithBlankTraceIdThrowsException() {
-        assertThatThrownBy(() -> Message.of(null, Map.of("value", 1)))
+        Map<String, Object> payload = Map.of("value", 1);
+
+        assertThatThrownBy(() -> Message.of(null, payload))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        assertThatThrownBy(() -> Message.of("", Map.of("value", 1)))
+        assertThatThrownBy(() -> Message.of("", payload))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

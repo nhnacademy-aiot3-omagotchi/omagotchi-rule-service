@@ -52,7 +52,11 @@ class FlowDefinitionTest {
             mutableNodes.add(sampleNode("nodeB"));
 
             assertThat(flowDefinition.nodes()).hasSize(1);
-            assertThatThrownBy(() -> flowDefinition.nodes().add(sampleNode("nodeC")))
+
+            List<NodeDefinition> nodes = flowDefinition.nodes();
+            NodeDefinition sampleNode = sampleNode("nodeC");
+
+            assertThatThrownBy(() -> nodes.add(sampleNode))
                     .isInstanceOf(UnsupportedOperationException.class);
         }
     }
@@ -64,7 +68,9 @@ class FlowDefinitionTest {
         @Test
         @DisplayName("id가 null이면 예외를 던진다")
         void nullIdThrowsException() {
-            assertThatThrownBy(() -> new FlowDefinition(null, null, null, List.of(sampleNode("nodeA")), null))
+            List<NodeDefinition> nodes = List.of(sampleNode("nodeA"));
+
+            assertThatThrownBy(() -> new FlowDefinition(null, null, null, nodes, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("id");
         }
@@ -72,7 +78,9 @@ class FlowDefinitionTest {
         @Test
         @DisplayName("id가 빈 문자열이면 예외를 던진다")
         void blankIdThrowsException() {
-            assertThatThrownBy(() -> new FlowDefinition("  ", null, null, List.of(sampleNode("nodeA")), null))
+            List<NodeDefinition> nodes = List.of(sampleNode("nodeA"));
+
+            assertThatThrownBy(() -> new FlowDefinition("  ", null, null, nodes, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("id");
         }
@@ -88,7 +96,9 @@ class FlowDefinitionTest {
         @Test
         @DisplayName("nodes가 빈 리스트면 예외를 던진다")
         void emptyNodesThrowsException() {
-            assertThatThrownBy(() -> new FlowDefinition("flow-1", null, null, List.of(), null))
+            List<NodeDefinition> nodes = List.of();
+
+            assertThatThrownBy(() -> new FlowDefinition("flow-1", null, null, nodes, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("nodes");
         }

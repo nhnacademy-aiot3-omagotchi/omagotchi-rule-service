@@ -43,7 +43,10 @@ class NodeDefinitionTest {
             mutableConfig.put("key", "changed");
 
             assertThat(nodeDefinition.config()).containsEntry("key", "value");
-            assertThatThrownBy(() -> nodeDefinition.config().put("new", "x"))
+            
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> config.put("new", "x"))
                     .isInstanceOf(UnsupportedOperationException.class);
         }
     }
@@ -55,7 +58,9 @@ class NodeDefinitionTest {
         @Test
         @DisplayName("id가 null이면 예외를 던진다")
         void nullIdThrowsException() {
-            assertThatThrownBy(() -> new NodeDefinition(null, "SampleSource", Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> new NodeDefinition(null, "SampleSource", config))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("id");
         }
@@ -63,7 +68,8 @@ class NodeDefinitionTest {
         @Test
         @DisplayName("id가 빈 문자열이면 예외를 던진다")
         void blankIdThrowsException() {
-            assertThatThrownBy(() -> new NodeDefinition("  ", "SampleSource", Map.of()))
+            Map<String, Object> config = Map.of();
+            assertThatThrownBy(() -> new NodeDefinition("  ", "SampleSource", config))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("id");
         }
@@ -71,7 +77,9 @@ class NodeDefinitionTest {
         @Test
         @DisplayName("type이 null이면 예외를 던진다")
         void nullTypeThrowsException() {
-            assertThatThrownBy(() -> new NodeDefinition("nodeA", null, Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> new NodeDefinition("nodeA", null, config))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("type");
         }
@@ -79,7 +87,9 @@ class NodeDefinitionTest {
         @Test
         @DisplayName("type이 빈 문자열이면 예외를 던진다")
         void blankTypeThrowsException() {
-            assertThatThrownBy(() -> new NodeDefinition("nodeA", "  ", Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> new NodeDefinition("nodeA", "  ", config))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("type");
         }
