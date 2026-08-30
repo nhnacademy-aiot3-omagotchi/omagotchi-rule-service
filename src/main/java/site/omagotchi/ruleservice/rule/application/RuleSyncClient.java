@@ -11,8 +11,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.global.filter.RequestIdGenerator;
-import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.domain.RuleCache;
+import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 
@@ -54,7 +54,7 @@ public class RuleSyncClient {
     @EventListener(ApplicationReadyEvent.class)
     public void onStartUp() {
         Thread worker = new Thread(
-                () -> initialSyncWithRetry(),
+                this::initialSyncWithRetry,
                 "rule-initial-sync"
         );
         worker.setDaemon(true);
@@ -143,7 +143,7 @@ public class RuleSyncClient {
                 .body(new ParameterizedTypeReference<List<RuleResponse>>() {
                 });
 
-        if(Objects.isNull(responses)){ //본문이 비어있는경우를 대비 (룰 설정이 안되어있다는게 아닌 걍 본문을 못받음)
+        if (Objects.isNull(responses)) { //본문이 비어있는경우를 대비 (룰 설정이 안되어있다는게 아닌 걍 본문을 못받음)
             throw new IllegalStateException("룰 본문이 null입니다.");
         }
 
