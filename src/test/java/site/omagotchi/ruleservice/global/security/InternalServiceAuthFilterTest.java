@@ -1,5 +1,8 @@
 package site.omagotchi.ruleservice.global.security;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -96,6 +100,38 @@ class InternalServiceAuthFilterTest {
 
         verify(this.filterChain).doFilter(request, response);
         assertThat(response.getStatus()).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    @DisplayName("인증 거부 로그에는 요청 경로와 전달받은 시크릿 원문을 남기지 않는다")
+    void omitsRequestPathAndSecretFromRejectionLog() throws Exception {
+        // Given
+        String sensitiveValue = "must-not-appear-in-security-log";
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST",
+                "/api/v1/internal/flows/" + sensitiveValue + "/start"
+        );
+        request.addHeader(InternalAuthHeader.NAME, sensitiveValue);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        Logger logger = (Logger) LoggerFactory.getLogger(InternalServiceAuthFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        // When
+        try {
+            this.internalServiceAuthFilter.doFilter(request, response, this.filterChain);
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+
+        // Then
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain(sensitiveValue);
+            assertThat(event.getKeyValuePairs().toString()).doesNotContain(sensitiveValue);
+        });
     }
 
     @Test
