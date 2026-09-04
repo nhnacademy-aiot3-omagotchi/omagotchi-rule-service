@@ -57,6 +57,13 @@ eureka:
       engine-priority: ${ENGINE_PRIORITY}
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+    propagation:
+      type: w3c
+    baggage:
+      enabled: false
   endpoints:
     web:
       exposure:
