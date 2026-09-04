@@ -23,7 +23,8 @@ MQTT → 정규화 → 품질 검사·룰 평가 → RabbitMQ → InfluxDB
 - 룰 조회 인증: Rule–Learning 관계 전용 HTTP Basic Credential
 - 룰 변경 반영: RabbitMQ Fanout 이벤트
 - 룰 누락 보정: 5분 주기 전체 재동기화
-- 추적 식별자: HTTP `requestId`, 파이프라인 `traceId`
+- 상관관계 식별자: HTTP `requestId`, 센서 처리 파이프라인 `traceId`
+  - 파이프라인 `traceId`는 W3C Trace ID가 아닌 기존 내부 상관관계 ID이며, 로그에는 `pipeline.correlation.id`로 기록
 
 ## 로컬 실행
 
@@ -81,7 +82,7 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 - 애플리케이션: `SERVER_PORT`, `LEARNING_BASE_URL`
 - Learning 조회 인증: `RULE_LEARNING_USERNAME`, `RULE_LEARNING_PASSWORD`
 - 엔진 식별: `ENGINE_ID`, `ENGINE_PRIORITY`
-- 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0) 
+- 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0)
 - 엔진 간 내부 통신: `INTERNAL_SHARED_SECRET`
 - Discovery: `EUREKA_ENABLED`, `EUREKA_URL`
 - JWT: `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_PUBLIC_KEY_LOCATION`

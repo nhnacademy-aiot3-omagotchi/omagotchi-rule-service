@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.global.security;
 
+import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import site.omagotchi.ruleservice.flow.application.FlowManager;
 import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.presentation.FlowController;
 import site.omagotchi.ruleservice.flow.presentation.response.FlowSummary;
+import site.omagotchi.ruleservice.global.exception.RuleErrorEventLogger;
 import site.omagotchi.ruleservice.recovery.application.ReplayService;
 import site.omagotchi.ruleservice.recovery.domain.ReplayResult;
 import site.omagotchi.ruleservice.recovery.presentation.ReplayController;
@@ -94,6 +96,12 @@ class RuleSecurityMvcTest {
     @MockitoBean
     private ReplayService replayService;
 
+    @MockitoBean
+    private Tracer tracer;
+
+    @MockitoBean
+    private RuleErrorEventLogger errorEventLogger;
+
     @Test
     @DisplayName("정확한 Rule ping 경로는 Access JWT 없이 호출")
     void permitsExactRulePingWithoutToken() throws Exception {
@@ -112,7 +120,7 @@ class RuleSecurityMvcTest {
     @DisplayName("Rule 운영 API는 Access JWT가 없으면 401")
     void rejectsProtectedRuleRequestWithoutToken() throws Exception {
         // Given
-        String requestId = "rule-security-401";
+        String requestId = "0123456789abcdef0123456789abcdef";
 
         // When
         ResultActions result = mockMvc.perform(get("/api/v1/rules")

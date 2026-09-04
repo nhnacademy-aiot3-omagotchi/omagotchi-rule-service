@@ -18,15 +18,22 @@ import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 @Slf4j
 @Component
 public class RawDataConsumer {
+    private static final String PIPELINE_CORRELATION_ID = "pipeline.correlation.id";
+
     private final WriteApiBlocking writeApi;
     private final RawFailureTracker tracker;
     private final String orgId;
     private final String bucket;
 
-    private final Counter deliveryAttempts;   // Rabbit에서 넘겨받은 시점
+    private final Counter deliveryAttempts;
     private final Counter consumed;
 
-    public RawDataConsumer(InfluxDBClient client, InfluxDbProperties properties, MeterRegistry registry, RawFailureTracker tracker){
+    public RawDataConsumer(
+            InfluxDBClient client,
+            InfluxDbProperties properties,
+            MeterRegistry registry,
+            RawFailureTracker tracker
+    ) {
         this.writeApi = client.getWriteApiBlocking();
         this.tracker = tracker;
         this.orgId = properties.org();
@@ -36,23 +43,30 @@ public class RawDataConsumer {
     }
 
     @RabbitListener(queues = RabbitTopologyConfig.QUEUE_RAW)
-    public void consume(SensorReading reading){
+    public void consume(SensorReading reading) {
         deliveryAttempts.increment();
 
-        if(reading.traceId() != null){
-            MDC.put("traceId", reading.traceId());
+        String previousCorrelationId = MDC.get(PIPELINE_CORRELATION_ID);
+        if (reading.traceId() == null) {
+            MDC.remove(PIPELINE_CORRELATION_ID);
+        } else {
+            MDC.put(PIPELINE_CORRELATION_ID, reading.traceId());
         }
 
-        try{
+        try {
             writeApi.writePoint(bucket, orgId, toPoint(reading));
             tracker.onSuccess();
             consumed.increment();
         } finally {
-            MDC.remove("traceId");
+            if (previousCorrelationId == null) {
+                MDC.remove(PIPELINE_CORRELATION_ID);
+            } else {
+                MDC.put(PIPELINE_CORRELATION_ID, previousCorrelationId);
+            }
         }
     }
 
-    private Point toPoint(SensorReading reading){
+    private Point toPoint(SensorReading reading) {
         return Point.measurement(reading.measurement())
                 .addTag("device_eui", reading.deviceEui())
                 .addTag("location", reading.location())

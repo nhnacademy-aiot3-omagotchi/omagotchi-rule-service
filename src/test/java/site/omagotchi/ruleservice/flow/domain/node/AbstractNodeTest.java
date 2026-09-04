@@ -1,5 +1,6 @@
 package site.omagotchi.ruleservice.flow.domain.node;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -12,6 +13,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.*;
 
 class AbstractNodeTest {
+    private static final String PIPELINE_CORRELATION_ID = "pipeline.correlation.id";
+
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
+    }
 
     @Test
     @DisplayName("생성 시 지정한 id를 그대로 반환한다")
@@ -72,18 +79,19 @@ class AbstractNodeTest {
     }
 
     @Test
-    @DisplayName("onProcess 실행 중에는 MDC의 traceId가 메시지의 traceId와 같고, 종료 후에는 제거된다")
-    void setsAndClearsMdcTraceIdAroundProcessing() {
+    @DisplayName("처리 중에는 파이프라인 상관관계 ID를 제공하고 종료 후 이전 값을 복원한다")
+    void restoresPreviousPipelineCorrelationIdAfterProcessing() {
+        MDC.put(PIPELINE_CORRELATION_ID, "outer-pipeline");
         AtomicReference<String> mdcDuringProcessing = new AtomicReference<>();
         RecordingNode node = new RecordingNode("node-1", msg -> {
-            mdcDuringProcessing.set(MDC.get("traceId"));
+            mdcDuringProcessing.set(MDC.get(PIPELINE_CORRELATION_ID));
         });
         Message msg = Message.of(Map.of("value", 1));
 
         node.process(msg);
 
         assertThat(mdcDuringProcessing.get()).isEqualTo(msg.getTraceId());
-        assertThat(MDC.get("traceId")).isNull();
+        assertThat(MDC.get(PIPELINE_CORRELATION_ID)).isEqualTo("outer-pipeline");
     }
 
     @Test
