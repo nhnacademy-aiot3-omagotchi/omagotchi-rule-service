@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.global.config;
+package site.omagotchi.ruleservice.rule.infrastructure;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -57,6 +57,13 @@ eureka:
       engine-priority: ${ENGINE_PRIORITY}
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+    propagation:
+      type: w3c
+    baggage:
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -156,12 +163,18 @@ quality:
       expectedIntervalSeconds: 600
 
 
-# 로그 패턴에 두 MDC값 모두 노출
-# requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.
-# 한 쪽만 있는 로그 줄에서는 나머지 하나가 빈 문자열로 나옴 (:- 뒤가 기본값)
 logging:
+  level:
+    root: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [requestId=%X{requestId:-}] [traceId=%X{traceId:-}] %m%n%wEx"
+    # 로컬 Text 로그의 HTTP 요청·Pipeline 메시지·분산 Trace 식별자
+    correlation: "[requestId=%X{http.request.id:-}] [pipelineId=%X{pipeline.correlation.id:-}] [traceId=%X{traceId:-}] [spanId=%X{spanId:-}] "
+  structured:
+    json:
+      # ECS 필드와 중복되는 Micrometer MDC 원본 이름 제외
+      exclude:
+        - traceId
+        - spanId
 
 internal:
   shared-secret: ${INTERNAL_SHARED_SECRET}
