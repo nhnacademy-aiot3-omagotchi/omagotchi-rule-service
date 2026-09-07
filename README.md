@@ -82,6 +82,8 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 - 애플리케이션: `SERVER_PORT`, `LEARNING_BASE_URL`
 - Learning 조회 인증: `RULE_LEARNING_USERNAME`, `RULE_LEARNING_PASSWORD`
 - 엔진 식별: `ENGINE_ID`, `ENGINE_PRIORITY`
+- 관측 식별: `SERVICE_VERSION`, `SERVICE_NODE_NAME`, `SERVICE_ENVIRONMENT`
+  - 운영 Compose의 이미지 SHA·엔진 이름·환경 주입, `PROD_ENV`의 수동 중복 등록 불필요
 - 이중화 기대치: `ENGINE_EXPECTED_PEER_COUNT` (기본 1 — A/B 구성 기준, 단일 엔진 운영 시 0)
 - 엔진 간 내부 통신: `INTERNAL_SHARED_SECRET`
 - Discovery: `EUREKA_ENABLED`, `EUREKA_URL`
@@ -112,12 +114,21 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 
 ## API 경계
 
-- 공개 경로: `GET /api/v1/rules/ping`, `/actuator/health`, `/actuator/info`
+- 애플리케이션 인증 예외: `GET /api/v1/rules/ping`, `/actuator/health`, `/actuator/info`, `/actuator/prometheus`
+- 운영 메트릭: Host Port 미노출·내부 Prometheus 조회, 외부 Nginx의 관리 경로 차단
 - 관리자 경로: `/api/v1/rules/**`, `/api/v1/flows/**`
 - 관리자 권한: `ROLE_SYSTEM_ADMIN`
 - 기타 경로: 기본 거부
 
 Smoke Test 경로 변경 시 Gateway Route와 Infra 배포 검증 경로의 동시 변경이 필요합니다.
+
+## 관측 운영 설정
+
+- Trace 전송: `TRACING_EXPORT_ENABLED`, 기본 비활성
+- 운영 전송 주소: Infra Compose의 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 공통 주입
+  - `http://omagotchi-otel-collector:4318/v1/traces`, 앱의 localhost 기본값과 구분
+  - Compose 밖에서 운영 실행 시 실제 Collector 주소의 별도 주입 필수
+- 공통 수집·접근 경계·운영 확인: [Infra 메트릭·Trace 가이드](https://github.com/nhnacademy-aiot3-omagotchi/omagotchi-infra/blob/main/observability/metrics-tracing.md#3-서비스-연결)
 
 ## Secret 관리
 
