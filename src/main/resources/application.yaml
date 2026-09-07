@@ -15,6 +15,7 @@ spring:
     # - publisher-confirm-type=correlated: PublishRetryBuffer의 발행 확인 콜백이 동작하는 조건
     listener:
       simple:
+        observation-enabled: true
         default-requeue-rejected: false
         retry:
           enabled: true
