@@ -4,6 +4,7 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.WriteApiBlocking;
 import com.influxdb.client.write.Point;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.tck.TestObservationRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,7 @@ import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
 import java.time.Instant;
 
+import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -40,6 +42,8 @@ class RawDataConsumerTest {
 
     SimpleMeterRegistry registry;
 
+    private final TestObservationRegistry observationRegistry = TestObservationRegistry.create();
+
     RawDataConsumer consumer;
 
     SensorReading reading;
@@ -56,7 +60,7 @@ class RawDataConsumerTest {
                 new InfluxDbProperties.Retention(7, 365, 0)
         );
 
-        consumer = new RawDataConsumer(client, properties, registry, tracker);
+        consumer = new RawDataConsumer(client, properties, registry, tracker, observationRegistry);
 
         reading = new SensorReading(
                 "test-traceId",
@@ -77,24 +81,35 @@ class RawDataConsumerTest {
     @Test
     @DisplayName("정상 소비 - raw 버킷에 쓰고 consumed 카운터 증가")
     void successConsumeTest() {
+        // When
         consumer.consume(reading);
 
+        // Then
         verify(writeApi).writePoint(eq(BUCKET), eq(ORG), any(Point.class));
         assertEquals(1.0, registry.get("influx.raw.consumed").counter().count());
         assertEquals(1.0, registry.get("raw.consumer.delivery.attempts").counter().count());
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("influxdb.write").hasBeenStarted().hasBeenStopped()
+                .doesNotHaveError().hasNoKeyValues();
     }
 
     @Test
     @DisplayName("쓰기 실패 - 재시도/DLQ 처리를 위해 예외 전파")
     void failConsumeTest() {
+        // Given
         RuntimeException failure = new RuntimeException("influx down");
         doThrow(failure).when(writeApi).writePoint(anyString(), anyString(), any(Point.class));
         MDC.put(RequestIdContext.MDC_KEY, REQUEST_ID);
 
+        // When
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> consumer.consume(reading));
 
+        // Then
         assertSame(failure, thrown);
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("influxdb.write").hasBeenStarted().hasBeenStopped()
+                .hasError(failure).hasNoKeyValues();
         assertEquals(0.0, registry.get("influx.raw.consumed").counter().count());
         assertEquals(1.0, registry.get("raw.consumer.delivery.attempts").counter().count());
         assertNull(MDC.get(PIPELINE_CORRELATION_ID));

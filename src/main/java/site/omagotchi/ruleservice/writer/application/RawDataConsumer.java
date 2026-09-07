@@ -6,6 +6,8 @@ import com.influxdb.client.domain.WritePrecision;
 import com.influxdb.client.write.Point;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -27,15 +29,18 @@ public class RawDataConsumer {
 
     private final Counter deliveryAttempts;
     private final Counter consumed;
+    private final ObservationRegistry observationRegistry;
 
     public RawDataConsumer(
             InfluxDBClient client,
             InfluxDbProperties properties,
             MeterRegistry registry,
-            RawFailureTracker tracker
+            RawFailureTracker tracker,
+            ObservationRegistry observationRegistry
     ) {
         this.writeApi = client.getWriteApiBlocking();
         this.tracker = tracker;
+        this.observationRegistry = observationRegistry;
         this.orgId = properties.org();
         this.bucket = properties.buckets().raw();
         this.deliveryAttempts = registry.counter("raw.consumer.delivery.attempts");
@@ -54,7 +59,9 @@ public class RawDataConsumer {
         }
 
         try {
-            writeApi.writePoint(bucket, orgId, toPoint(reading));
+            // Rabbit 소비 Span 아래 실제 적재 시간 측정, 센서 원본·기기 식별자 제외
+            Observation.createNotStarted("influxdb.write", observationRegistry)
+                    .observe(() -> writeApi.writePoint(bucket, orgId, toPoint(reading)));
             tracker.onSuccess();
             consumed.increment();
         } finally {
