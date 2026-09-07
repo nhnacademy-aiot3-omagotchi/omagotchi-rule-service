@@ -4,6 +4,7 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.WriteApiBlocking;
 import com.influxdb.client.write.Point;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -56,7 +57,7 @@ class RawDataConsumerTest {
                 new InfluxDbProperties.Retention(7, 365, 0)
         );
 
-        consumer = new RawDataConsumer(client, properties, registry, tracker);
+        consumer = new RawDataConsumer(client, properties, registry, tracker, ObservationRegistry.NOOP);
 
         reading = new SensorReading(
                 "test-traceId",
