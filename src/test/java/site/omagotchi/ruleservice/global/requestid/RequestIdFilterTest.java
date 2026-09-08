@@ -8,6 +8,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.MDC;
@@ -44,17 +46,24 @@ class RequestIdFilterTest {
         MDC.clear();
     }
 
-    @Test
-    @DisplayName("유효한 X-Request-ID가 들어오면 그대로 이어받아 응답 헤더에 반영한다")
-    void reusesValidIncomingRequestId() throws ServletException, IOException {
-        String incoming = "0123456789abcdef0123456789abcdef";
-
+    @ParameterizedTest
+    @ValueSource(strings = {"0123456789abcdef0123456789abcdef", "Dev-Request_01.test", "Z"})
+    @DisplayName("허용한 단일 Request ID의 요청·응답·MDC 전파")
+    void reusesValidIncomingRequestId(String incoming) throws ServletException, IOException {
+        // Given
         givenRequestIds(incoming);
+        doAnswer(invocation -> {
+            assertThat(MDC.get(RequestIdContext.MDC_KEY)).isEqualTo(incoming);
+            return null;
+        }).when(filterChain).doFilter(request, response);
 
+        // When
         requestIdFilter.doFilter(request, response, filterChain);
 
+        // Then
         verify(response).setHeader(RequestId.HEADER_NAME, incoming);
         verify(filterChain).doFilter(request, response);
+        assertThat(MDC.get(RequestIdContext.MDC_KEY)).isNull();
     }
 
     @Test
@@ -83,18 +92,20 @@ class RequestIdFilterTest {
         );
     }
 
-    @Test
-    @DisplayName("형식이 잘못된 X-Request-ID는 새 값으로 교체한다")
-    void replacesInvalidIncomingRequestId() throws ServletException, IOException {
-        String invalid = "ABCDEF0123456789ABCDEF0123456789";
-
+    @ParameterizedTest
+    @ValueSource(strings = {"", "invalid request id", "0123456789abcdef0123456789abcdef!", "first,second", "한글"})
+    @DisplayName("누락되거나 허용하지 않은 문자가 있는 Request ID의 신규 발급")
+    void replacesInvalidIncomingRequestId(String invalid) throws ServletException, IOException {
+        // Given
         givenRequestIds(invalid);
 
+        // When
         requestIdFilter.doFilter(request, response, filterChain);
 
+        // Then
         verify(response).setHeader(
                 eq(RequestId.HEADER_NAME),
-                argThat(id -> RequestId.isValid(id) && !invalid.equals(id))
+                argThat(id -> id.matches("[0-9a-f]{32}") && !invalid.equals(id))
         );
     }
 
@@ -165,6 +176,27 @@ class RequestIdFilterTest {
 
         assertThrows(ServletException.class, () -> requestIdFilter.doFilter(request, response, filterChain));
 
+        assertThat(MDC.get(RequestIdContext.MDC_KEY)).isNull();
+    }
+
+    @Test
+    @DisplayName("긴 Request ID의 앞 32자를 요청·응답·MDC에 동일하게 적용")
+    void propagatesTruncatedRequestId() throws Exception {
+        // Given
+        String incoming = "Dev-Request_0123456789.abcdefghijk-extra";
+        String expected = incoming.substring(0, 32);
+        givenRequestIds(incoming);
+        doAnswer(invocation -> {
+            assertThat(MDC.get(RequestIdContext.MDC_KEY)).isEqualTo(expected);
+            return null;
+        }).when(filterChain).doFilter(request, response);
+
+        // When
+        requestIdFilter.doFilter(request, response, filterChain);
+
+        // Then
+        verify(response).setHeader(RequestId.HEADER_NAME, expected);
+        verify(request).setAttribute(RequestId.ATTRIBUTE_NAME, new RequestId(expected));
         assertThat(MDC.get(RequestIdContext.MDC_KEY)).isNull();
     }
 

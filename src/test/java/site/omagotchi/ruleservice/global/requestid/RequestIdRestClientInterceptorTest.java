@@ -27,7 +27,7 @@ class RequestIdRestClientInterceptorTest {
         RestClient client = builder
                 .requestInterceptor(new RequestIdRestClientInterceptor())
                 .build();
-        String requestId = "0123456789abcdef0123456789abcdef";
+        String requestId = "Dev-Request_01.test";
         MDC.put(RequestIdContext.MDC_KEY, requestId);
         server.expect(requestTo("http://learning-service.test/probe"))
                 .andExpect(header(RequestId.HEADER_NAME, requestId))
@@ -46,7 +46,7 @@ class RequestIdRestClientInterceptorTest {
         RestClient client = builder
                 .requestInterceptor(new RequestIdRestClientInterceptor())
                 .build();
-        MDC.put(RequestIdContext.MDC_KEY, "invalid-request-id");
+        MDC.put(RequestIdContext.MDC_KEY, "invalid request id");
         server.expect(requestTo("http://learning-service.test/probe"))
                 .andExpect(header(RequestId.HEADER_NAME, matchesPattern("^[0-9a-f]{32}$")))
                 .andRespond(withNoContent());
