@@ -1,7 +1,12 @@
 server:
   port: ${SERVER_PORT}
+  # 배포 관리 경계에서 실제 연결 주소 사용, 전달 Header에 의한 주소 변환 제외
+  forward-headers-strategy: none
+  shutdown: graceful
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   task:
     scheduling:
       pool:
@@ -52,6 +57,9 @@ eureka:
     registry-fetch-interval-seconds: 5
 
   instance:
+    # 같은 슬롯의 재기동과 이전 등록 구분, 초기화 완료 전 UP 등록 방지
+    instance-id: ${spring.application.name}:${random.uuid}
+    initial-status: STARTING
     prefer-ip-address: true
     metadata-map:
       engine-id: ${ENGINE_ID}
@@ -96,9 +104,13 @@ management:
           - health
           - prometheus
           - info
+          - registry
+          - serviceregistry
           - metrics
   endpoint:
     health:
+      probes:
+        enabled: true
       show-details: never
 
 auth:
