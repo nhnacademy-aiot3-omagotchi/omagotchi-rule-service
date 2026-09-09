@@ -7,6 +7,12 @@ server:
 spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  cloud:
+    loadbalancer:
+      retry:
+        enabled: false
+      cache:
+        enabled: false
   task:
     scheduling:
       pool:
