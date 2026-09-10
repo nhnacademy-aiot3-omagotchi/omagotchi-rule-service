@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerMapping;
+import site.omagotchi.ruleservice.global.logging.ErrorStackTrace;
 
 import java.util.UUID;
 
@@ -44,6 +45,7 @@ public class RuleErrorEventLogger {
                 .addKeyValue("event.outcome", "failure")
                 .addKeyValue("error.code", CommonErrorCode.INTERNAL_SERVER_ERROR.code())
                 .addKeyValue("error.type", exception.getClass().getName())
+                .addKeyValue("error.stack_trace", ErrorStackTrace.format(exception))
                 .addKeyValue("http.request.method", request.getMethod())
                 .addKeyValue("http.response.status_code", statusCode);
 
