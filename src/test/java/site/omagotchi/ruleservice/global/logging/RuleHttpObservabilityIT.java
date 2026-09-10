@@ -108,6 +108,9 @@ class RuleHttpObservabilityIT {
                 .isEqualTo("COMMON_INTERNAL_SERVER_ERROR");
         assertThat(errorEvent.at("/error/type").asString())
                 .isEqualTo(IllegalStateException.class.getName());
+        assertThat(errorEvent.at("/omagotchi/error/stack_trace").asString())
+                .contains(IllegalStateException.class.getName()).doesNotContain(FAILURE_DETAIL);
+        assertThat(errorEvent.at("/error/stack_trace").isMissingNode()).isTrue();
         assertThat(diagnosticEvent.at("/event/id").asString())
                 .isEqualTo(errorEvent.at("/event/id").asString());
         assertThat(diagnosticEvent.at("/error/message").asString()).isEqualTo(FAILURE_DETAIL);
