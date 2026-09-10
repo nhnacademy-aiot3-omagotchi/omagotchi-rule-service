@@ -40,7 +40,7 @@ class RuleErrorEventLoggerTest {
             Map<String, Object> fields = safe.getKeyValuePairs().stream()
                     .collect(Collectors.toMap(pair -> pair.key, pair -> pair.value));
             then(fields).containsEntry("event.dataset", "rule-service.error");
-            then((String) fields.get("error.stack_trace"))
+            then((String) fields.get("omagotchi.error.stack_trace"))
                     .contains("RuleErrorEventLoggerTest.recordsLocationsWithoutExceptionMessages(")
                     .doesNotContain("private-token");
             then(safe.getThrowableProxy()).isNull();
