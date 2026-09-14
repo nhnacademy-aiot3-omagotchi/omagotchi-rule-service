@@ -150,6 +150,7 @@ class RuleHttpObservabilityIT {
 
         @GetMapping("/probe")
         void probe() {
+            // 정상 HTTP 요청의 관찰성 필터 동작을 검증하는 엔드포인트라 응답 본문이 필요 없다.
         }
 
         @GetMapping("/failure")
