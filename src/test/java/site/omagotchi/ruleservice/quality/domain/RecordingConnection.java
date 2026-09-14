@@ -36,6 +36,6 @@ public class RecordingConnection implements Connection {
 
     @Override
     public void close() {
-        received.clear();
+        // 빈 구현
     }
 }
