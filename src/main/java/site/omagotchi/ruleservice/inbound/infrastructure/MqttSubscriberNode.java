@@ -91,7 +91,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
 
         } catch (MqttException e) {
             log.error("[{}] MQTT 초기화 실패 (brokerUrl = {})", getId(), brokerUrl, e);
-            throw new RuntimeException(e);
+            throw new IllegalStateException(
+                    "[%s] MQTT 연결을 초기화할 수 없습니다: brokerUrl = %s".formatted(getId(), brokerUrl),
+                    e
+            );
         }
         super.initialize();
     }
@@ -114,7 +117,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
             log.info("[{}] 구독 시작 (topicFilter = {})", getId(), topicFilter);
         } catch (MqttException e) {
             log.error("[{}] 구독 시작 실패 (topicFilter = {})", getId(), topicFilter, e);
-            throw new RuntimeException(e);
+            throw new IllegalStateException(
+                    "[%s] MQTT 구독을 시작할 수 없습니다: topicFilter = %s".formatted(getId(), topicFilter),
+                    e
+            );
         }
     }
 
@@ -134,7 +140,10 @@ public class MqttSubscriberNode extends AbstractNode implements MqttCallback, Ac
             log.info("[{}] 구독 중단 (topicFilter = {})", getId(), topicFilter);
         } catch (MqttException e) {
             log.error("[{}] 구독 중단 실패 (topicFilter = {})", getId(), topicFilter, e);
-            throw new RuntimeException(e);
+            throw new IllegalStateException(
+                    "[%s] MQTT 구독을 중단할 수 없습니다: topicFilter = %s".formatted(getId(), topicFilter),
+                    e
+            );
         }
     }
 
