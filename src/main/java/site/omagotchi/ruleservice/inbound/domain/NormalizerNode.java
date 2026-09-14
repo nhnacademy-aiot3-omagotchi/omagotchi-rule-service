@@ -19,6 +19,7 @@ import java.util.Map;
  * 프레임 하나(object N항목)가 N개의 SensorReading으로 분해되며 traceId를 공유한다.
  */
 @Slf4j
+@SuppressWarnings({"java:S1192", "java:S3776"})
 public class NormalizerNode extends AbstractNode {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final LastSeenRegistry lastSeenRegistry;
@@ -32,6 +33,7 @@ public class NormalizerNode extends AbstractNode {
     }
 
     @Override
+    @SuppressWarnings("java:S6541")
     protected void onProcess(Message message) {
         String raw = message.get("raw");
         Instant receivedAt = message.get("receivedAt");
