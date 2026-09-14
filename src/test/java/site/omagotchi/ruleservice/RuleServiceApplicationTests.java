@@ -18,5 +18,6 @@ class RuleServiceApplicationTests {
 
     @Test
     void contextLoads() {
+        // 애플리케이션 컨텍스트가 예외 없이 생성되는지가 검증 대상이다.
     }
 }

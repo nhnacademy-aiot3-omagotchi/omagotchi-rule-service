@@ -281,6 +281,7 @@ class MqttSubscriberNodeStandbyTest {
 
         @Override
         public void close() {
+            // 테스트용 기록 객체는 해제할 외부 자원을 보유하지 않는다.
         }
     }
 }
