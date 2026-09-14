@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * MQTT 브로커 없이 normalizer -> collector 파이프라인을 실제 FlowEngine 위에서 돌려,
  * 원시 메시지가 SensorReading으로 정규화되고 traceId가 전 구간 승계되는지 검증한다. (C-4 축소판)
  */
+@SuppressWarnings("java:S2925")
 class InboundPipelineTest {
 
     private static final String FLOW_ID = "test-inbound-pipeline";
