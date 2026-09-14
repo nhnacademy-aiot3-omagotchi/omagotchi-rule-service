@@ -5,9 +5,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -199,75 +203,70 @@ class FlowParserTest {
                     .hasMessageContaining("ghost");
         }
     }
-
     @Nested
     @DisplayName("검증: 순환 참조")
     class CycleValidation {
 
-        @Test
-        @DisplayName("직접 순환(A->B->A)이면 예외를 던진다")
-        void directCycleThrowsException() {
-            String json = """
-                    {
-                      "id": "flow-cycle",
-                      "nodes": [
-                        { "id": "nodeA", "type": "T" },
-                        { "id": "nodeB", "type": "T" }
-                      ],
-                      "connections": [
-                        { "from": "nodeA:out", "to": "nodeB:in" },
-                        { "from": "nodeB:out", "to": "nodeA:in" }
-                      ]
-                    }
-                    """;
-
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("cyclicFlowCases")
+        void cyclicFlowThrowsException(String caseName, String json) {
             assertThatThrownBy(() -> flowParser.parse(json))
+                    .as(caseName)
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("순환 참조");
         }
 
-        @Test
-        @DisplayName("간접 순환(A->B->C->A)이면 예외를 던진다")
-        void indirectCycleThrowsException() {
-            String json = """
-                    {
-                      "id": "flow-cycle-2",
-                      "nodes": [
-                        { "id": "nodeA", "type": "T" },
-                        { "id": "nodeB", "type": "T" },
-                        { "id": "nodeC", "type": "T" }
-                      ],
-                      "connections": [
-                        { "from": "nodeA:out", "to": "nodeB:in" },
-                        { "from": "nodeB:out", "to": "nodeC:in" },
-                        { "from": "nodeC:out", "to": "nodeA:in" }
-                      ]
-                    }
-                    """;
-
-            assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("순환 참조");
-        }
-
-        @Test
-        @DisplayName("자기 자신을 향한 순환(A->A)이면 예외를 던진다")
-        void selfLoopThrowsException() {
-            String json = """
-                    {
-                      "id": "flow-self-loop",
-                      "nodes": [
-                        { "id": "nodeA", "type": "T" }
-                      ],
-                      "connections": [
-                        { "from": "nodeA:out", "to": "nodeA:in" }
-                      ]
-                    }
-                    """;
-
-            assertThatThrownBy(() -> flowParser.parse(json))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("순환 참조");
+        private static Stream<Arguments> cyclicFlowCases() {
+            return Stream.of(
+                    Arguments.of(
+                            "직접 순환(A->B->A)",
+                            """
+                            {
+                              "id": "flow-cycle",
+                              "nodes": [
+                                { "id": "nodeA", "type": "T" },
+                                { "id": "nodeB", "type": "T" }
+                              ],
+                              "connections": [
+                                { "from": "nodeA:out", "to": "nodeB:in" },
+                                { "from": "nodeB:out", "to": "nodeA:in" }
+                              ]
+                            }
+                            """
+                    ),
+                    Arguments.of(
+                            "간접 순환(A->B->C->A)",
+                            """
+                            {
+                              "id": "flow-cycle-2",
+                              "nodes": [
+                                { "id": "nodeA", "type": "T" },
+                                { "id": "nodeB", "type": "T" },
+                                { "id": "nodeC", "type": "T" }
+                              ],
+                              "connections": [
+                                { "from": "nodeA:out", "to": "nodeB:in" },
+                                { "from": "nodeB:out", "to": "nodeC:in" },
+                                { "from": "nodeC:out", "to": "nodeA:in" }
+                              ]
+                            }
+                            """
+                    ),
+                    Arguments.of(
+                            "자기 자신을 향한 순환(A->A)",
+                            """
+                            {
+                              "id": "flow-self-loop",
+                              "nodes": [
+                                { "id": "nodeA", "type": "T" }
+                              ],
+                              "connections": [
+                                { "from": "nodeA:out", "to": "nodeA:in" }
+                              ]
+                            }
+                            """
+                    )
+            );
         }
 
         @Test
