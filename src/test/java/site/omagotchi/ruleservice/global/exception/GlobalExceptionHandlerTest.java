@@ -17,6 +17,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.ServletWebRequest;
+import site.omagotchi.ruleservice.global.requestid.RequestIdContext;
 import site.omagotchi.ruleservice.flow.application.FlowErrorCode;
 
 import java.util.List;
@@ -29,18 +30,20 @@ import static org.mockito.Mockito.when;
 class GlobalExceptionHandlerTest {
 
     private static final String REQUEST_URI = "/flows/flow-1";
-    private static final String MDC_REQUEST_ID_KEY = "requestId";
     private static final String DIAGNOSTIC_MESSAGE =
             "flowId = flow-1, nodeId = node-a, threshold = -1, expected = 0 이상";
 
     @Mock
     private HttpServletRequest request;
 
+    @Mock
+    private RuleErrorEventLogger errorEventLogger;
+
     private GlobalExceptionHandler globalExceptionHandler;
 
     @BeforeEach
     void setUp() {
-        this.globalExceptionHandler = new GlobalExceptionHandler();
+        this.globalExceptionHandler = new GlobalExceptionHandler(this.errorEventLogger);
         when(request.getRequestURI()).thenReturn(REQUEST_URI);
     }
 
@@ -176,7 +179,6 @@ class GlobalExceptionHandlerTest {
     @DisplayName("호출 계약 위반을 500(COMMON_INTERNAL_SERVER_ERROR)으로 숨김")
     void hidesIllegalArgumentException() {
         // Given
-        when(request.getMethod()).thenReturn("POST");
         IllegalArgumentException exception =
                 new IllegalArgumentException("외부에 노출하면 안 되는 인자 정보");
 
@@ -194,7 +196,6 @@ class GlobalExceptionHandlerTest {
     @DisplayName("내부 상태 위반을 500(COMMON_INTERNAL_SERVER_ERROR)으로 숨김")
     void hidesIllegalStateException() {
         // Given
-        when(request.getMethod()).thenReturn("POST");
         IllegalStateException exception =
                 new IllegalStateException("외부에 노출하면 안 되는 상태 정보");
 
@@ -212,7 +213,7 @@ class GlobalExceptionHandlerTest {
     @DisplayName("MDC requestId의 응답 Body 반영")
     void includesRequestIdFromMdc() {
         // Given
-        MDC.put(MDC_REQUEST_ID_KEY, "test-request-id");
+        MDC.put(RequestIdContext.MDC_KEY, "test-request-id");
         BusinessException exception = new BusinessException(CommonErrorCode.INVALID_REQUEST);
 
         // When

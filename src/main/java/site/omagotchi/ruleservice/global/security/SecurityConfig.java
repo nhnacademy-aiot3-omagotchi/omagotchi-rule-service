@@ -44,9 +44,10 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         // 외부 라우팅 확인용 Smoke 경로만 공개
                         .requestMatchers(HttpMethod.GET, "/api/v1/rules/ping").permitAll()
-                        // Gateway와 다른 도메인 서비스가 공통으로 사용하는 상태 확인 경로만 공개
+                        // 배포 확인·내부 메트릭 수집용 Actuator 경로
                         .requestMatchers(
                                 "/actuator/health",
+                                "/actuator/prometheus",
                                 "/actuator/health/**",
                                 "/actuator/info",
                                 "/actuator/metrics/**"

@@ -48,3 +48,7 @@ engine:
 
 internal:
   shared-secret: test-shared-secret
+
+logging:
+  level:
+    root: WARN

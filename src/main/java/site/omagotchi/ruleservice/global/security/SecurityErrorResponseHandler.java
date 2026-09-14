@@ -17,17 +17,19 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.ruleservice.global.exception.ApiErrorResponse;
 import site.omagotchi.ruleservice.global.exception.CommonErrorCode;
 import site.omagotchi.ruleservice.global.exception.ErrorCode;
+import site.omagotchi.ruleservice.global.requestid.RequestIdContext;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-// Controller 이전에 발생한 Security 예외를 공통 JSON 응답으로 변환
+/**
+ * Spring Security Bearer 처리 결과를 보존한 인증·인가 실패의 공통 JSON 응답.
+ * 상태·{@code WWW-Authenticate} 헤더는 기존 처리기에 위임하고 공통 오류 본문만 기록.
+ */
 @Component
 @RequiredArgsConstructor
 public class SecurityErrorResponseHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
-
-    private static final String MDC_REQUEST_ID_KEY = "requestId";
 
     private final ObjectMapper objectMapper;
     private final BearerTokenAuthenticationEntryPoint authenticationEntryPoint =
@@ -41,6 +43,7 @@ public class SecurityErrorResponseHandler implements AuthenticationEntryPoint, A
             @NonNull HttpServletResponse response,
             @NonNull AuthenticationException exception
     ) throws IOException {
+        // 인증 실패 상태와 WWW-Authenticate 헤더 결정을 기존 Bearer 처리기에 위임
         authenticationEntryPoint.commence(request, response, exception);
         ErrorCode errorCode = response.getStatus() == HttpStatus.BAD_REQUEST.value()
                 ? CommonErrorCode.INVALID_REQUEST
@@ -54,6 +57,7 @@ public class SecurityErrorResponseHandler implements AuthenticationEntryPoint, A
             @NonNull HttpServletResponse response,
             @NonNull AccessDeniedException exception
     ) throws IOException {
+        // 인가 실패 상태와 WWW-Authenticate 헤더 결정을 기존 Bearer 처리기에 위임
         accessDeniedHandler.handle(request, response, exception);
         write(response, SecurityErrorCode.ACCESS_DENIED, request.getRequestURI());
     }
@@ -67,7 +71,7 @@ public class SecurityErrorResponseHandler implements AuthenticationEntryPoint, A
                 errorCode.code(),
                 errorCode.message(),
                 path,
-                MDC.get(MDC_REQUEST_ID_KEY)
+                MDC.get(RequestIdContext.MDC_KEY)
         );
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

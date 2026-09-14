@@ -4,18 +4,23 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.WriteApiBlocking;
 import com.influxdb.client.write.Point;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.tck.TestObservationRegistry;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
+import site.omagotchi.ruleservice.global.requestid.RequestIdContext;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
 import site.omagotchi.ruleservice.recovery.application.RawFailureTracker;
 import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 
 import java.time.Instant;
 
+import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -23,6 +28,8 @@ import static org.mockito.Mockito.*;
 class RawDataConsumerTest {
     private static final String ORG = "org-id";
     private static final String BUCKET = "omagotchi-raw";
+    private static final String REQUEST_ID = "0123456789abcdef0123456789abcdef";
+    private static final String PIPELINE_CORRELATION_ID = "pipeline.correlation.id";
 
     @Mock
     InfluxDBClient client;
@@ -35,13 +42,15 @@ class RawDataConsumerTest {
 
     SimpleMeterRegistry registry;
 
+    private final TestObservationRegistry observationRegistry = TestObservationRegistry.create();
+
     RawDataConsumer consumer;
 
     SensorReading reading;
 
     @BeforeEach
-    void setUp(){
-        when(client.getWriteApiBlocking()).thenReturn(writeApi);   // ← 대입이 아니라 스텁
+    void setUp() {
+        when(client.getWriteApiBlocking()).thenReturn(writeApi);
 
         registry = new SimpleMeterRegistry();
 
@@ -51,7 +60,7 @@ class RawDataConsumerTest {
                 new InfluxDbProperties.Retention(7, 365, 0)
         );
 
-        consumer = new RawDataConsumer(client, properties, registry, tracker);
+        consumer = new RawDataConsumer(client, properties, registry, tracker, observationRegistry);
 
         reading = new SensorReading(
                 "test-traceId",
@@ -64,34 +73,52 @@ class RawDataConsumerTest {
         );
     }
 
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
+    }
 
     @Test
     @DisplayName("정상 소비 - raw 버킷에 쓰고 consumed 카운터 증가")
-    void successConsumeTest(){
+    void successConsumeTest() {
+        // When
         consumer.consume(reading);
 
+        // Then
         verify(writeApi).writePoint(eq(BUCKET), eq(ORG), any(Point.class));
         assertEquals(1.0, registry.get("influx.raw.consumed").counter().count());
         assertEquals(1.0, registry.get("raw.consumer.delivery.attempts").counter().count());
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("influxdb.write").hasBeenStarted().hasBeenStopped()
+                .doesNotHaveError().hasNoKeyValues();
     }
 
     @Test
     @DisplayName("쓰기 실패 - 재시도/DLQ 처리를 위해 예외 전파")
-    void failConsumeTest(){
+    void failConsumeTest() {
+        // Given
         RuntimeException failure = new RuntimeException("influx down");
         doThrow(failure).when(writeApi).writePoint(anyString(), anyString(), any(Point.class));
+        MDC.put(RequestIdContext.MDC_KEY, REQUEST_ID);
 
+        // When
         RuntimeException thrown = assertThrows(RuntimeException.class,
                 () -> consumer.consume(reading));
 
+        // Then
         assertSame(failure, thrown);
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("influxdb.write").hasBeenStarted().hasBeenStopped()
+                .hasError(failure).hasNoKeyValues();
         assertEquals(0.0, registry.get("influx.raw.consumed").counter().count());
         assertEquals(1.0, registry.get("raw.consumer.delivery.attempts").counter().count());
+        assertNull(MDC.get(PIPELINE_CORRELATION_ID));
+        assertEquals(REQUEST_ID, MDC.get(RequestIdContext.MDC_KEY));
     }
 
     @Test
-    @DisplayName("Point 매핑 - 태크/필드/타임스탬프가 라인프로토콜에 반영")
-    void pointMappingTest(){
+    @DisplayName("Point 매핑 - 태그/필드/타임스탬프가 라인프로토콜에 반영")
+    void pointMappingTest() {
         consumer.consume(reading);
 
         verify(writeApi).writePoint(eq(BUCKET), eq(ORG), assertArg(point ->
@@ -103,4 +130,21 @@ class RawDataConsumerTest {
         ));
     }
 
+    @Test
+    @DisplayName("RabbitMQ Pipeline ID는 별도 MDC에 두고 HTTP Request ID는 보존")
+    void keepsPipelineAndHttpRequestContextsSeparate() {
+        MDC.put(PIPELINE_CORRELATION_ID, "outer-pipeline");
+        MDC.put(RequestIdContext.MDC_KEY, REQUEST_ID);
+
+        doAnswer(invocation -> {
+            assertEquals(reading.traceId(), MDC.get(PIPELINE_CORRELATION_ID));
+            assertEquals(REQUEST_ID, MDC.get(RequestIdContext.MDC_KEY));
+            return null;
+        }).when(writeApi).writePoint(eq(BUCKET), eq(ORG), any(Point.class));
+
+        consumer.consume(reading);
+
+        assertEquals("outer-pipeline", MDC.get(PIPELINE_CORRELATION_ID));
+        assertEquals(REQUEST_ID, MDC.get(RequestIdContext.MDC_KEY));
+    }
 }

@@ -1,7 +1,18 @@
 server:
   port: ${SERVER_PORT}
+  # 배포 관리 경계에서 실제 연결 주소 사용, 전달 Header에 의한 주소 변환 제외
+  forward-headers-strategy: none
+  shutdown: graceful
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  cloud:
+    loadbalancer:
+      retry:
+        enabled: false
+      cache:
+        enabled: false
   task:
     scheduling:
       pool:
@@ -15,6 +26,7 @@ spring:
     # - publisher-confirm-type=correlated: PublishRetryBuffer의 발행 확인 콜백이 동작하는 조건
     listener:
       simple:
+        observation-enabled: true
         default-requeue-rejected: false
         retry:
           enabled: true
@@ -51,21 +63,60 @@ eureka:
     registry-fetch-interval-seconds: 5
 
   instance:
+    # 같은 슬롯의 재기동과 이전 등록 구분, 초기화 완료 전 UP 등록 방지
+    instance-id: ${spring.application.name}:${random.uuid}
+    initial-status: STARTING
     prefer-ip-address: true
     metadata-map:
       engine-id: ${ENGINE_ID}
       engine-priority: ${ENGINE_PRIORITY}
 
 management:
+  # Trace 전파 유지, Collector 전송은 운영 환경에서만 활성화
+  opentelemetry:
+    tracing:
+      export:
+        max-queue-size: 1024
+        max-batch-size: 128
+        schedule-delay: 5s
+        timeout: 3s
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          connect-timeout: 1s
+          timeout: 2s
+      limits:
+        max-attributes: 32
+        max-attribute-value-length: 256
+        max-events: 8
+  metrics:
+    distribution:
+      # p95 집계용 고정 Bucket, Route·상태 조합별 Series 증가량 제한
+      slo:
+        http.server.requests: 5ms,10ms,25ms,50ms,100ms,250ms,500ms,1s,2500ms,5s,10s,30s,60s
+  tracing:
+    export:
+      otlp:
+        enabled: false
+    sampling:
+      probability: 1.0
+    propagation:
+      type: w3c
+    baggage:
+      enabled: false
   endpoints:
     web:
       exposure:
         include:
           - health
+          - prometheus
           - info
+          - registry
+          - serviceregistry
           - metrics
   endpoint:
     health:
+      probes:
+        enabled: true
       show-details: never
 
 auth:
@@ -156,12 +207,18 @@ quality:
       expectedIntervalSeconds: 600
 
 
-# 로그 패턴에 두 MDC값 모두 노출
-# requestId(HTTP 요청 단위)와 traceId(파이프라인 메시지 단위) 둘 다 찍히도록.
-# 한 쪽만 있는 로그 줄에서는 나머지 하나가 빈 문자열로 나옴 (:- 뒤가 기본값)
 logging:
+  level:
+    root: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : [requestId=%X{requestId:-}] [traceId=%X{traceId:-}] %m%n%wEx"
+    # 로컬 Text 로그의 HTTP 요청·Pipeline 메시지·분산 Trace 식별자
+    correlation: "[requestId=%X{http.request.id:-}] [pipelineId=%X{pipeline.correlation.id:-}] [traceId=%X{traceId:-}] [spanId=%X{spanId:-}] "
+  structured:
+    json:
+      # ECS 필드와 중복되는 Micrometer MDC 원본 이름 제외
+      exclude:
+        - traceId
+        - spanId
 
 internal:
   shared-secret: ${INTERNAL_SHARED_SECRET}

@@ -1,4 +1,4 @@
-package site.omagotchi.ruleservice.global.config;
+package site.omagotchi.ruleservice.rule.infrastructure;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;

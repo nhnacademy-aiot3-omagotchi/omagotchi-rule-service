@@ -15,7 +15,7 @@ import java.util.Objects;
 @Slf4j
 public abstract class AbstractNode implements Node {
 
-    private static final String MDC_TRACE_ID_KEY = "traceId";
+    private static final String PIPELINE_CORRELATION_ID = "pipeline.correlation.id";
 
     private final String id;
     private final Map<String, InputPort> inputPorts = new LinkedHashMap<>();
@@ -43,7 +43,13 @@ public abstract class AbstractNode implements Node {
             return;
         }
 
-        MDC.put(MDC_TRACE_ID_KEY, message.getTraceId());
+        String previousCorrelationId = MDC.get(PIPELINE_CORRELATION_ID);
+        if (message.getTraceId() == null) {
+            MDC.remove(PIPELINE_CORRELATION_ID);
+        } else {
+            MDC.put(PIPELINE_CORRELATION_ID, message.getTraceId());
+        }
+
         try {
             log.debug("[{}] 메시지 처리 시작: {}", this.id, message);
             onProcess(message);
@@ -51,7 +57,11 @@ public abstract class AbstractNode implements Node {
         } catch (Exception e) {
             log.error("[{}] 메시지 처리 중 예외 발생 (메시지는 격리되고 노드는 계속 동작)", this.id, e);
         } finally {
-            MDC.remove(MDC_TRACE_ID_KEY);
+            if (previousCorrelationId == null) {
+                MDC.remove(PIPELINE_CORRELATION_ID);
+            } else {
+                MDC.put(PIPELINE_CORRELATION_ID, previousCorrelationId);
+            }
         }
     }
 

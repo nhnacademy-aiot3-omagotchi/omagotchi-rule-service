@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -15,18 +16,17 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import site.omagotchi.ruleservice.global.exception.ApiErrorResponse;
+import site.omagotchi.ruleservice.global.requestid.RequestIdContext;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Objects;
 
+/** 내부 API 경로의 서비스 공유 Secret 검증과 안전한 거부 응답 기록. */
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class InternalServiceAuthFilter extends OncePerRequestFilter {
-
-    private static final String MDC_REQUEST_ID_KEY = "requestId";
 
     private final InternalAuthProperties internalAuthProperties;
     private final ObjectMapper objectMapper;
@@ -54,9 +54,9 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    // 타이밍 공격 방지 - String.equals()는 첫 불일치 문자에서 바로 반환해 비교 시간이 세어나갈 수 있어 상수 시간 비교 사용
-    private boolean matchesSharedSecret(String rawToken) {
-        if (Objects.isNull(rawToken)) {
+    // 공유 Secret 비교의 상수 시간 보장
+    private boolean matchesSharedSecret(@Nullable String rawToken) {
+        if (rawToken == null) {
             return false;
         }
 
@@ -69,7 +69,14 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
     private void reject(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String path = request.getRequestURI();
 
-        log.warn("[{}] 공유 시크릿 헤더 검증 실패 - 접근 거부 (remoteAddr = {})", path, request.getRemoteAddr());
+        log.atWarn()
+                .addKeyValue("event.dataset", "rule-service.security")
+                .addKeyValue("event.action", "internal.authentication.failed")
+                .addKeyValue("event.outcome", "failure")
+                .addKeyValue("error.code", SecurityErrorCode.ACCESS_DENIED.code())
+                .addKeyValue("http.request.method", request.getMethod())
+                .addKeyValue("http.response.status_code", HttpStatus.FORBIDDEN.value())
+                .log("Internal service authentication rejected");
 
         response.setStatus(HttpStatus.FORBIDDEN.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -79,7 +86,7 @@ public class InternalServiceAuthFilter extends OncePerRequestFilter {
                 SecurityErrorCode.ACCESS_DENIED.code(),
                 SecurityErrorCode.ACCESS_DENIED.message(),
                 path,
-                MDC.get(MDC_REQUEST_ID_KEY)
+                MDC.get(RequestIdContext.MDC_KEY)
         );
 
         this.objectMapper.writeValue(response.getOutputStream(), body);

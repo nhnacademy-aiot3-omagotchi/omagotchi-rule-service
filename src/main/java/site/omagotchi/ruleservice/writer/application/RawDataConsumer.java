@@ -6,6 +6,8 @@ import com.influxdb.client.domain.WritePrecision;
 import com.influxdb.client.write.Point;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -18,17 +20,27 @@ import site.omagotchi.ruleservice.writer.infrastructure.InfluxDbProperties;
 @Slf4j
 @Component
 public class RawDataConsumer {
+    private static final String PIPELINE_CORRELATION_ID = "pipeline.correlation.id";
+
     private final WriteApiBlocking writeApi;
     private final RawFailureTracker tracker;
     private final String orgId;
     private final String bucket;
 
-    private final Counter deliveryAttempts;   // Rabbit에서 넘겨받은 시점
+    private final Counter deliveryAttempts;
     private final Counter consumed;
+    private final ObservationRegistry observationRegistry;
 
-    public RawDataConsumer(InfluxDBClient client, InfluxDbProperties properties, MeterRegistry registry, RawFailureTracker tracker){
+    public RawDataConsumer(
+            InfluxDBClient client,
+            InfluxDbProperties properties,
+            MeterRegistry registry,
+            RawFailureTracker tracker,
+            ObservationRegistry observationRegistry
+    ) {
         this.writeApi = client.getWriteApiBlocking();
         this.tracker = tracker;
+        this.observationRegistry = observationRegistry;
         this.orgId = properties.org();
         this.bucket = properties.buckets().raw();
         this.deliveryAttempts = registry.counter("raw.consumer.delivery.attempts");
@@ -36,23 +48,32 @@ public class RawDataConsumer {
     }
 
     @RabbitListener(queues = RabbitTopologyConfig.QUEUE_RAW)
-    public void consume(SensorReading reading){
+    public void consume(SensorReading reading) {
         deliveryAttempts.increment();
 
-        if(reading.traceId() != null){
-            MDC.put("traceId", reading.traceId());
+        String previousCorrelationId = MDC.get(PIPELINE_CORRELATION_ID);
+        if (reading.traceId() == null) {
+            MDC.remove(PIPELINE_CORRELATION_ID);
+        } else {
+            MDC.put(PIPELINE_CORRELATION_ID, reading.traceId());
         }
 
-        try{
-            writeApi.writePoint(bucket, orgId, toPoint(reading));
+        try {
+            // Rabbit 소비 Span 아래 실제 적재 시간 측정, 센서 원본·기기 식별자 제외
+            Observation.createNotStarted("influxdb.write", observationRegistry)
+                    .observe(() -> writeApi.writePoint(bucket, orgId, toPoint(reading)));
             tracker.onSuccess();
             consumed.increment();
         } finally {
-            MDC.remove("traceId");
+            if (previousCorrelationId == null) {
+                MDC.remove(PIPELINE_CORRELATION_ID);
+            } else {
+                MDC.put(PIPELINE_CORRELATION_ID, previousCorrelationId);
+            }
         }
     }
 
-    private Point toPoint(SensorReading reading){
+    private Point toPoint(SensorReading reading) {
         return Point.measurement(reading.measurement())
                 .addTag("device_eui", reading.deviceEui())
                 .addTag("location", reading.location())

@@ -1,7 +1,7 @@
 package site.omagotchi.ruleservice.global.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
@@ -17,20 +17,21 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import site.omagotchi.ruleservice.global.requestid.RequestIdContext;
 
-@Slf4j
 @RestControllerAdvice
 @NullMarked
+@RequiredArgsConstructor
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-    private static final String MDC_REQUEST_ID_KEY = "requestId";
+    private final RuleErrorEventLogger errorEventLogger;
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(
             BusinessException exception,
             HttpServletRequest request
     ) {
-        return response(exception.getErrorCode(), request);
+        return buildErrorResponse(exception.getErrorCode(), request);
     }
 
     @Override
@@ -46,7 +47,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .map(DefaultMessageSourceResolvable::getDefaultMessage)
                 .orElse("요청값이 올바르지 않습니다.");
 
-        return frameworkResponse(
+        return buildFrameworkErrorResponse(
                 exception,
                 CommonErrorCode.INVALID_REQUEST,
                 message,
@@ -63,7 +64,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode statusCode,
             WebRequest request
     ) {
-        return frameworkResponse(
+        return buildFrameworkErrorResponse(
                 exception,
                 CommonErrorCode.MALFORMED_REQUEST,
                 CommonErrorCode.MALFORMED_REQUEST.message(),
@@ -86,9 +87,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 : CommonErrorCode.INVALID_REQUEST;
 
         if (statusCode.is5xxServerError()) {
-            logUnexpected(exception, ((ServletWebRequest) request).getRequest());
+            this.errorEventLogger.logUnexpected(
+                    exception,
+                    statusCode.value(),
+                    ((ServletWebRequest) request).getRequest()
+            );
         }
-        return frameworkResponse(
+        return buildFrameworkErrorResponse(
                 exception,
                 errorCode,
                 errorCode.message(),
@@ -103,11 +108,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
-        logUnexpected(exception, request);
-        return response(CommonErrorCode.INTERNAL_SERVER_ERROR, request);
+        this.errorEventLogger.logUnexpected(
+                exception,
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                request
+        );
+        return buildErrorResponse(CommonErrorCode.INTERNAL_SERVER_ERROR, request);
     }
 
-    private @Nullable ResponseEntity<Object> frameworkResponse(
+    private @Nullable ResponseEntity<Object> buildFrameworkErrorResponse(
             Exception exception,
             ErrorCode errorCode,
             String message,
@@ -130,9 +139,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 errorCode.code(),
                 message,
                 ((ServletWebRequest) request).getRequest().getRequestURI(),
-                MDC.get(MDC_REQUEST_ID_KEY)
+                MDC.get(RequestIdContext.MDC_KEY)
         );
-        // 요청 URI는 HTML이 아닌 JSON 문자열로 직렬화되므로 XSS 실행 문맥이 아님
         return new ResponseEntity<>(
                 body,
                 springResponse.getHeaders(),
@@ -140,31 +148,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         );
     }
 
-    private void logUnexpected(Exception exception, HttpServletRequest request) {
-        log.error(
-                "예상하지 못한 서버 오류 code={}, exception={}, method={}, path={}",
-                CommonErrorCode.INTERNAL_SERVER_ERROR.code(),
-                exception.getClass().getName(),
-                request.getMethod(),
-                request.getRequestURI(),
-                exception
-        );
-    }
-
-    private ResponseEntity<ApiErrorResponse> response(
+    private ResponseEntity<ApiErrorResponse> buildErrorResponse(
             ErrorCode errorCode,
             HttpServletRequest request
     ) {
         HttpStatus status = ErrorHttpStatusMapper.map(errorCode.type());
 
-        // 요청 URI는 HTML이 아닌 JSON 문자열로 직렬화되므로 XSS 실행 문맥이 아님
         return ResponseEntity
                 .status(status)
                 .body(new ApiErrorResponse(
                         errorCode.code(),
                         errorCode.message(),
                         request.getRequestURI(),
-                        MDC.get(MDC_REQUEST_ID_KEY)
+                        MDC.get(RequestIdContext.MDC_KEY)
                 ));
     }
 }
