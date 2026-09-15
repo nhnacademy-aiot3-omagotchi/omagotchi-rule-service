@@ -12,7 +12,6 @@ import site.omagotchi.ruleservice.quality.domain.QualityEvent;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -20,6 +19,7 @@ import java.util.Map;
  * 프레임 하나(object N항목)가 N개의 SensorReading으로 분해되며 traceId를 공유한다.
  */
 @Slf4j
+@SuppressWarnings({"java:S1192", "java:S3776"})
 public class NormalizerNode extends AbstractNode {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final LastSeenRegistry lastSeenRegistry;
@@ -33,6 +33,7 @@ public class NormalizerNode extends AbstractNode {
     }
 
     @Override
+    @SuppressWarnings("java:S6541")
     protected void onProcess(Message message) {
         String raw = message.get("raw");
         Instant receivedAt = message.get("receivedAt");
@@ -105,9 +106,7 @@ public class NormalizerNode extends AbstractNode {
             }
 
             //object 순회 - measurement마다 SensorReading 생성
-            Iterator<Map.Entry<String, JsonNode>> fields = object.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
+            for (Map.Entry<String, JsonNode> field : object.properties()) {
                 String measurement = field.getKey();
                 JsonNode valueNode = field.getValue();
 
@@ -128,7 +127,7 @@ public class NormalizerNode extends AbstractNode {
 
                 //SensorReading 조립
                 SensorReading sensorReading = new SensorReading(message.getTraceId(), location, point, deviceEui,
-                        measurement,value, measuredAt, receivedAt, deviceName, fCnt);
+                        measurement, value, measuredAt, receivedAt, deviceName, fCnt);
                 //수신 기록
                 lastSeenRegistry.update(deviceEui, measurement, receivedAt);
 

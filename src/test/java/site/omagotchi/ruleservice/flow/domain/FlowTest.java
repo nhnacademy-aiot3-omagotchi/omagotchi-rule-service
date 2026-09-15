@@ -92,8 +92,8 @@ class FlowTest {
     void addNodeWithDuplicateIdThrowsException() {
         Flow flow = new Flow("flow-1");
         flow.addNode(new RecordingNode("nodeA"));
-
-        assertThatThrownBy(() -> flow.addNode(new RecordingNode("nodeA")))
+        RecordingNode recordingNode = new RecordingNode("nodeA");
+        assertThatThrownBy(() -> flow.addNode(recordingNode))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("nodeA");
     }

@@ -19,9 +19,9 @@ import site.omagotchi.ruleservice.global.security.TestJwtKeyConfig;
 
 import java.util.Map;
 
-
 import static org.junit.jupiter.api.Assertions.*;
-/** 실제 환경을 testContainer로 확인 (통합 x)*/
+
+/** 실제 환경을 testContainer로 확인 (통합 x) */
 @Slf4j
 @Import(TestJwtKeyConfig.class)
 @ActiveProfiles("test")
@@ -39,33 +39,22 @@ class RabbitTopologyConfigTest {
     @Autowired
     RabbitTemplate rabbitTemplate;
 
-    @Test
-    @DisplayName("뷰 확인용 출력된 url을 확인해서 뷰에서 토폴로지 생성 확인 가능")
-    void viewTest() throws InterruptedException{
-        log.info("관리 UI: " + rabbitMQContainer.getHttpUrl());
-        log.info("id: guest, password: guest");
-
-        // 뷰 확인 필요시 아래 주석 해제.
-        // 테스트 코드가 종료되면 컨테이너도 내려가기때문에 일시중단 기능
-
-        // Thread.sleep(600_000);
-    }
 
     @Test
     @DisplayName("익스체인지 생성 확인")
-    void generateExchangeTest(){
+    void generateExchangeTest() {
         assertDoesNotThrow(
-                () -> rabbitTemplate.execute( channel ->{
-                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_MAIN);
-                        channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_RAW_DEAD_LETTER);
-                        return null;
-                    })
+                () -> rabbitTemplate.execute(channel -> {
+                    channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_MAIN);
+                    channel.exchangeDeclarePassive(RabbitTopologyConfig.EXCHANGE_RAW_DEAD_LETTER);
+                    return null;
+                })
         );
     }
 
     @Test
     @DisplayName("큐 생성 확인")
-    void generateQueueTest(){
+    void generateQueueTest() {
         assertAll(
                 () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_RAW)),
                 () -> assertNotNull(amqpAdmin.getQueueProperties(RabbitTopologyConfig.QUEUE_QUALITY)),

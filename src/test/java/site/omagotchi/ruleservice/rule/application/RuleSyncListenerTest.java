@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Import(TestJwtKeyConfig.class)
 @ActiveProfiles("test")
 @ImportAutoConfiguration(RabbitAutoConfiguration.class)
+@SuppressWarnings("java:S2925")
 class RuleSyncListenerTest {
 
     @Container

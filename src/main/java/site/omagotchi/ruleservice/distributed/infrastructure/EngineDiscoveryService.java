@@ -132,8 +132,8 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
                 .filter(instance -> this.selfEngineId.equals(instance.getMetadata().get("engine-id")))
                 .count();
 
-        if(selfIdCount > 1) {
-            if(!this.duplicateSelfIdWarned) {
+        if (selfIdCount > 1) {
+            if (!this.duplicateSelfIdWarned) {
                 log.error("[EngineDiscoveryService] ENGINE_ID '{}'로 등록된 인스턴스가 {}개 발견됨 - 설정 오류로 서로를 자기 자신으로 오인해 이중화가 깨질 수 있습니다. 각 엔진의 ENGINE_ID가 고유한지 확인하세요.",
                         this.selfEngineId, selfIdCount);
                 this.duplicateSelfIdWarned = true;
@@ -231,6 +231,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
      * (의도적) 스케일다운(2대 -> 1대) 후에도 죽은 주소를 매초 폴링하고 topology가 영구 DEGRADED로 남는 것을 방지
      * 호출 자체가 "이번 주기에 Eureka 조회가 성공했을 때"로 제한되므로, discovery-service 장애로는 만료되지 않음
      */
+    @SuppressWarnings("java:S135")
     private boolean expireLongGonePeers() {
         long now = this.clock.millis();
         boolean removedAny = false;
@@ -266,6 +267,7 @@ public class EngineDiscoveryService implements EngineDirectoryPort {
         this.identityMismatchWarned.remove(peerEngineId);
     }
 
+    @SuppressWarnings("java:S3776")
     private boolean pollOne(String peerEngineId, ServiceInstance instance) {
         try {
             PeerSelfInfo response = this.engineInternalRestClient.get()

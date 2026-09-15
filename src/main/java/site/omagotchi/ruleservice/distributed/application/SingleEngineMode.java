@@ -46,21 +46,21 @@ public class SingleEngineMode implements EngineActivePort, PeerFlowSyncPort {
     // 아래 4개 오버라이딩 -> 단일 엔진 모드이므로 전달할 파트너 없음
     @Override
     public void syncStart(String flowId) {
-
+        // 단일 엔진 모드에는 동기화할 피어가 없으므로 의도적으로 아무 작업도 하지 않는다.
     }
 
     @Override
     public void syncStop(String flowId) {
-
+        // 단일 엔진 모드에는 동기화할 피어가 없으므로 의도적으로 아무 작업도 하지 않는다.
     }
 
     @Override
     public void syncRestart(String flowId) {
-
+        // 단일 엔진 모드에는 동기화할 피어가 없으므로 의도적으로 아무 작업도 하지 않는다.
     }
 
     @Override
     public void syncReconfigure(String flowId, String nodeId, Map<String, Object> config) {
-
+        // 단일 엔진 모드에는 동기화할 피어가 없으므로 의도적으로 아무 작업도 하지 않는다.
     }
 }

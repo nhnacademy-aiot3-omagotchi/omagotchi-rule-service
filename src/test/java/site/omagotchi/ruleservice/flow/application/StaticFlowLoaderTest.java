@@ -15,7 +15,6 @@ import site.omagotchi.ruleservice.flow.infrastructure.parser.NodeDefinition;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,8 +68,8 @@ class StaticFlowLoaderTest {
             staticFlowLoader.run(applicationArguments);
 
             // 두 정의 모두 정확히 한 번씩, 정확한 내용으로 deploy 호출됐는지 검증
-            verify(flowManager, times(1)).deploy(eq(flowDef1));
-            verify(flowManager, times(1)).deploy(eq(flowDef2));
+            verify(flowManager, times(1)).deploy(flowDef1);
+            verify(flowManager, times(1)).deploy(flowDef2);
             verify(flowManager, times(2)).deploy(any());
         }
     }
@@ -100,7 +99,7 @@ class StaticFlowLoaderTest {
             staticFlowLoader.run(applicationArguments);
 
             // 실패한 리소스는 deploy가 호출되지 않고, 성공한 리소스만 정확히 한 번 deploy 됨
-            verify(flowManager, times(1)).deploy(eq(validDef));
+            verify(flowManager, times(1)).deploy(validDef);
             verify(flowManager, times(1)).deploy(any());
         }
 
@@ -125,14 +124,14 @@ class StaticFlowLoaderTest {
                 }
                 return flowDef2;
             });
-            doThrow(new RuntimeException("배포 실패")).when(flowManager).deploy(eq(flowDef1));
+            doThrow(new RuntimeException("배포 실패")).when(flowManager).deploy(flowDef1);
 
             // flowDef1의 deploy가 예외를 던져도 run() 자체는 정상 종료되어야 함 (전파되면 테스트 실패)
             staticFlowLoader.run(applicationArguments);
 
             // flowDef1은 실패했지만 시도는 됐고, flowDef2는 정상 배포됨
-            verify(flowManager, times(1)).deploy(eq(flowDef1));
-            verify(flowManager, times(1)).deploy(eq(flowDef2));
+            verify(flowManager, times(1)).deploy(flowDef1);
+            verify(flowManager, times(1)).deploy(flowDef2);
         }
     }
 }

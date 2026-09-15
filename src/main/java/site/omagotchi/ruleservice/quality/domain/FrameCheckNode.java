@@ -15,12 +15,13 @@ import java.util.Map;
  * 중복(DUPLICATE)·지연(DELAYED)·결측(MISSING)은 이벤트로 발행하고,
  * 순서역전·fCnt리셋은 로그로만 남긴다.
  */
+@SuppressWarnings("java:S1192")
 @Slf4j
 public class FrameCheckNode extends AbstractNode {
 
     private static final int MAX_MISSING_REPORTS = 20;
 
-            private final Cache<String,Boolean> seen = Caffeine.newBuilder()
+    private final Cache<String, Boolean> seen = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofMinutes(10))
             .maximumSize(100000)
             .build();
@@ -47,26 +48,26 @@ public class FrameCheckNode extends AbstractNode {
         addOutputPort("missing");
     }
 
+    @SuppressWarnings("java:S3776")
     @Override
     protected void onProcess(Message message) {
         SensorReading sensorReading = message.get("sensorReading");
 
         String key = sensorReading.fCnt() != null
-                ? sensorReading.deviceEui()+":"+sensorReading.measurement()+":"+sensorReading.fCnt()
-                : sensorReading.deviceEui()+":"+sensorReading.measurement()+":"+sensorReading.measuredAt();
+                ? sensorReading.deviceEui() + ":" + sensorReading.measurement() + ":" + sensorReading.fCnt()
+                : sensorReading.deviceEui() + ":" + sensorReading.measurement() + ":" + sensorReading.measuredAt();
 
-        Duration gap = Duration.between(sensorReading.measuredAt(),sensorReading.receivedAt());
+        Duration gap = Duration.between(sensorReading.measuredAt(), sensorReading.receivedAt());
 
         //중복 판정
-        if (seen.getIfPresent(key) != null){
+        if (seen.getIfPresent(key) != null) {
 
             log.info("[중복] {}:{} key={}", sensorReading.deviceEui(), sensorReading.measurement(), key);
 
-            QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.DUPLICATE,"중복: "+key);
+            QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.DUPLICATE, "중복: " + key);
             send("duplicate", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
             return;
-        }
-        else {
+        } else {
             seen.put(key, true);
         }
 
@@ -123,16 +124,15 @@ public class FrameCheckNode extends AbstractNode {
         }
 
         //지연 판정
-        if(gap.getSeconds() > 60){
+        if (gap.getSeconds() > 60) {
 
             log.info("[지연] {}:{} {}초",
                     sensorReading.deviceEui(), sensorReading.measurement(), gap.getSeconds());
 
-            send("out", message.withEntry("_delayed",true));
+            send("out", message.withEntry("_delayed", true));
             QualityEvent event = QualityEvent.from(sensorReading, QualityEvent.Type.DELAYED, "지연: " + gap.getSeconds() + "초");
             send("delayed", Message.of(sensorReading.traceId(), Map.of("qualityEvent", event)));
-        }
-        else {
+        } else {
             send("out", message);
         }
     }

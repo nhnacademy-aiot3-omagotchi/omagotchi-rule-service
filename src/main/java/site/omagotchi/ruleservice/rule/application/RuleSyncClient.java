@@ -10,8 +10,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.ruleservice.global.requestid.RequestIdContext;
-import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.domain.RuleCache;
+import site.omagotchi.ruleservice.rule.domain.ThresholdRule;
 import site.omagotchi.ruleservice.rule.infrastructure.InMemoryRuleCache;
 import site.omagotchi.ruleservice.rule.infrastructure.RuleResponse;
 
