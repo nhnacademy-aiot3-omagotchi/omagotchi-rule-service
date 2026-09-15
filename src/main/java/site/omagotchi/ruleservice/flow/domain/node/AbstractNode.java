@@ -138,9 +138,9 @@ public abstract class AbstractNode implements Node {
         // 기본 빈 구현 (자원이 필요한 노드가 오버라이드)
     }
 
-    private void requirePortName(String portName) {
+    private static void requirePortName(String portName) {
         if (Objects.isNull(portName) || portName.isBlank()) {
-            throw new IllegalArgumentException("포트 이름이 nulld이거나 비어있습니다.");
+            throw new IllegalArgumentException("포트 이름이 null이거나 비어있습니다.");
         }
     }
 }
