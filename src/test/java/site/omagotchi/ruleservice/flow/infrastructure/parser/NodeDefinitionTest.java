@@ -43,8 +43,7 @@ class NodeDefinitionTest {
             mutableConfig.put("key", "changed");
 
             assertThat(nodeDefinition.config()).containsEntry("key", "value");
-            
-            Map<String, Object> config = Map.of();
+            Map<String, Object> config = nodeDefinition.config();
 
             assertThatThrownBy(() -> config.put("new", "x"))
                     .isInstanceOf(UnsupportedOperationException.class);
