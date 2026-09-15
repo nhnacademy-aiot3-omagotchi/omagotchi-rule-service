@@ -1,7 +1,7 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.flow.domain.connection.Connection;
 import site.omagotchi.ruleservice.flow.domain.Message;
+import site.omagotchi.ruleservice.flow.domain.connection.Connection;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +36,6 @@ public class RecordingConnection implements Connection {
 
     @Override
     public void close() {
-
+        // 빈 구현
     }
 }

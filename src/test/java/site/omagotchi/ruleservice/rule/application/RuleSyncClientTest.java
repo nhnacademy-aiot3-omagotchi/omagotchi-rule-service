@@ -18,16 +18,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+@SuppressWarnings("java:S2925")
 class RuleSyncClientTest {
 
     private static final String V1 = """
-        [{"ruleId":1,"deviceEui":"eui-1","metric":"co2","operator":"GT",
-          "threshold":1000.0,"ruleVersion":1,"updatedAt":0}]
-        """;
+            [{"ruleId":1,"deviceEui":"eui-1","metric":"co2","operator":"GT",
+              "threshold":1000.0,"ruleVersion":1,"updatedAt":0}]
+            """;
     private static final String V2 = """
-        [{"ruleId":1,"deviceEui":"eui-1","metric":"co2","operator":"GT",
-          "threshold":800.0,"ruleVersion":2,"updatedAt":0}]
-        """;
+            [{"ruleId":1,"deviceEui":"eui-1","metric":"co2","operator":"GT",
+              "threshold":800.0,"ruleVersion":2,"updatedAt":0}]
+            """;
 
     MockRestServiceServer restServiceServer;
     InMemoryRuleCache inMemoryRuleCache;

@@ -12,15 +12,13 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
-import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 import site.omagotchi.ruleservice.messaging.domain.PublishMode;
-import site.omagotchi.ruleservice.messaging.infrastructure.RabbitPublisherNode;
-
 
 import java.time.Instant;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,7 +32,7 @@ class PublishRetryBufferTest {
 
     @Test
     @DisplayName("메세지 발송시 브로커에 문제 발생 - 버퍼 적재")
-    void recoveryTest1(){
+    void recoveryTest1() {
         PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate, registry);
         RabbitPublisherNode node = new RabbitPublisherNode("pub-raw", rabbitTemplate, RabbitTopologyConfig.EXCHANGE_MAIN, PublishMode.RAW, buffer);
 
@@ -56,7 +54,7 @@ class PublishRetryBufferTest {
 
     @Test
     @DisplayName("메세지 발송시 브로커에 문제 발생 - 재발송")
-    void recoveryTest2(){
+    void recoveryTest2() {
         PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate, registry); // 실제 버퍼
 
         buffer.offer(raw("raw.a"));
@@ -75,7 +73,7 @@ class PublishRetryBufferTest {
 
     @Test
     @DisplayName("상한 초과시 메세지 버림 테스트 - raw부터 폐기")
-    void overflowEvictionTest(){
+    void overflowEvictionTest() {
         PublishRetryBuffer buffer = new PublishRetryBuffer(rabbitTemplate, 2);
 
         buffer.offer(quality("qualitiy.message"));
@@ -86,8 +84,7 @@ class PublishRetryBufferTest {
     }
 
 
-
-    private PendingMessage raw(String routingKey){
+    private PendingMessage raw(String routingKey) {
         return new PendingMessage(
                 RabbitTopologyConfig.EXCHANGE_MAIN,
                 routingKey,
@@ -97,7 +94,7 @@ class PublishRetryBufferTest {
         );
     }
 
-    private PendingMessage quality(String routingKey){
+    private PendingMessage quality(String routingKey) {
         return new PendingMessage(
                 RabbitTopologyConfig.EXCHANGE_MAIN,
                 routingKey,
@@ -106,6 +103,7 @@ class PublishRetryBufferTest {
                 PublishMode.QUALITY
         );
     }
+
     private SensorReading sampleReading() {
         return new SensorReading(
                 "trace-1",

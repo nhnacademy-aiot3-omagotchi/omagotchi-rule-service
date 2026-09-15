@@ -1,13 +1,12 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.distributed.application.MutableClock;
-import site.omagotchi.ruleservice.flow.domain.Message;
-import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import site.omagotchi.ruleservice.distributed.application.MutableClock;
+import site.omagotchi.ruleservice.flow.domain.Message;
+import site.omagotchi.ruleservice.quality.infrastructure.QualityProperties;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -20,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+@SuppressWarnings("java:S2925")
 class DisconnectDetectorNodeTest {
 
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");

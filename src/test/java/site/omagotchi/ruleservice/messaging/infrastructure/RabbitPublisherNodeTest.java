@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.messaging.infrastructure;
 
-import site.omagotchi.ruleservice.messaging.domain.PublishMode;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,9 +11,8 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.inbound.domain.SensorReading;
+import site.omagotchi.ruleservice.messaging.domain.PublishMode;
 import site.omagotchi.ruleservice.quality.domain.QualityEvent;
-import site.omagotchi.ruleservice.messaging.infrastructure.PublishRetryBuffer;
-import site.omagotchi.ruleservice.messaging.infrastructure.RabbitTopologyConfig;
 
 import java.time.Instant;
 import java.util.Map;
@@ -105,6 +102,6 @@ class RabbitPublisherNodeTest {
     private SensorReading sampleReading() {
         return new SensorReading(
                 "trace-1", "livingroom", "point-a", "eui-123",
-                "temperature", 30.0, Instant.now(), Instant.now(), "온도센서",1L);
+                "temperature", 30.0, Instant.now(), Instant.now(), "온도센서", 1L);
     }
 }

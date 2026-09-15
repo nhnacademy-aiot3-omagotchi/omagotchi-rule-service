@@ -1,7 +1,5 @@
 package site.omagotchi.ruleservice.quality.domain;
 
-import site.omagotchi.ruleservice.quality.domain.QualityEvent;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,7 +12,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class StuckSensorNodeTest {
+class StuckSensorNodeTest {
 
     private StuckSensorNode node;
     private RecordingConnection out;
@@ -32,7 +30,7 @@ public class StuckSensorNodeTest {
     private Message message(String measurement, double value, Instant measuredAt) {
         SensorReading reading = new SensorReading(
                 "trace-1", "실습실", "전방", "eui-1", measurement,
-                value, measuredAt, measuredAt, "sensor-1",1L);
+                value, measuredAt, measuredAt, "sensor-1", 1L);
         return Message.of("trace-1", Map.of("sensorReading", reading));
     }
 

@@ -45,7 +45,9 @@ class NodeRegistryTest {
         void duplicateTypeThrowsException() {
             nodeRegistry.register(descriptorOf("SampleSource"));
 
-            assertThatThrownBy(() -> nodeRegistry.register(descriptorOf("SampleSource")))
+            NodeDescriptor descriptor = descriptorOf("SampleSource");
+
+            assertThatThrownBy(() -> nodeRegistry.register(descriptor))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("SampleSource");
         }
@@ -101,7 +103,9 @@ class NodeRegistryTest {
         @Test
         @DisplayName("등록되지 않은 타입으로 생성하면 IllegalArgumentException을 던진다")
         void unknownTypeThrowsException() {
-            assertThatThrownBy(() -> nodeRegistry.create("Ghost", Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> nodeRegistry.create("Ghost", config))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Ghost");
         }
@@ -112,7 +116,9 @@ class NodeRegistryTest {
             nodeRegistry.register(descriptorOf("SampleSource"));
             nodeRegistry.register(descriptorOf("SampleSink"));
 
-            assertThatThrownBy(() -> nodeRegistry.create("Ghost", Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> nodeRegistry.create("Ghost", config))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("SampleSource")
                     .hasMessageContaining("SampleSink");
@@ -121,14 +127,18 @@ class NodeRegistryTest {
         @Test
         @DisplayName("typeName이 null이면 IllegalArgumentException을 던진다")
         void nullTypeNameThrowsException() {
-            assertThatThrownBy(() -> nodeRegistry.create(null, Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> nodeRegistry.create(null, config))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("typeName이 빈 문자열이면 IllegalArgumentException을 던진다")
         void blankTypeNameThrowsException() {
-            assertThatThrownBy(() -> nodeRegistry.create("  ", Map.of()))
+            Map<String, Object> config = Map.of();
+
+            assertThatThrownBy(() -> nodeRegistry.create("  ", config))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }

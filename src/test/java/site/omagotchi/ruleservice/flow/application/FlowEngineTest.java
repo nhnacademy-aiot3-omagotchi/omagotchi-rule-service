@@ -1,10 +1,9 @@
 package site.omagotchi.ruleservice.flow.application;
 
-import site.omagotchi.ruleservice.flow.domain.FlowState;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import site.omagotchi.ruleservice.flow.domain.Flow;
+import site.omagotchi.ruleservice.flow.domain.FlowState;
 import site.omagotchi.ruleservice.flow.domain.Message;
 import site.omagotchi.ruleservice.flow.domain.node.RecordingNode;
 
@@ -125,7 +124,9 @@ class FlowEngineTest {
         FlowEngine flowEngine = new FlowEngine();
         flowEngine.register(new Flow("flow-1"));
 
-        assertThatThrownBy(() -> flowEngine.register(new Flow("flow-1")))
+        Flow flow = new Flow("flow-1");
+
+        assertThatThrownBy(() -> flowEngine.register(flow))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("flow-1");
     }

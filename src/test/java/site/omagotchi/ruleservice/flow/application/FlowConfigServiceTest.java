@@ -46,8 +46,9 @@ class FlowConfigServiceTest {
     void nodeNotFoundPropagatesTest() {
 
         when(flowManager.getNode(FLOW_ID, NODE_ID)).thenThrow(new BusinessException(FlowErrorCode.NODE_NOT_FOUND, "flowId = %s, nodeId = %s".formatted(FLOW_ID, NODE_ID)));
+        Map<String, Object> newConfig = Map.of("threshold", 10);
 
-        assertThatThrownBy(() -> flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 10)))
+        assertThatThrownBy(() -> flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -58,7 +59,9 @@ class FlowConfigServiceTest {
         AbstractNode plainNode = mock(AbstractNode.class);
         when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(plainNode);
 
-        assertThatThrownBy(() -> flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 10)))
+        Map<String, Object> newConfig = Map.of("threshold", 10);
+
+        assertThatThrownBy(() -> flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig))
                 .isInstanceOf(BusinessException.class);
 
         verify(flowManager, never()).getNodeConfig(any(), any());
@@ -99,8 +102,10 @@ class FlowConfigServiceTest {
         when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(node);
         when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
 
+        Map<String, Object> newConfig = Map.of("threshold", -1);
+
         assertThatThrownBy(() ->
-                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", -1))) // 0 이상의 정수여야 함 (FakeReconfigurableNode의 정책)
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig)) // 0 이상의 정수여야 함 (FakeReconfigurableNode의 정책)
                 .isInstanceOf(BusinessException.class);
 
         assertThat(node.getThreshold()).isEqualTo(100);
@@ -116,8 +121,10 @@ class FlowConfigServiceTest {
 
         flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 200)); // 성공 (200으로 바뀜)
 
+        Map<String, Object> newConfig = Map.of("threshold", -1);
+
         assertThatThrownBy(() ->
-                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", -1))) // 실패
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig)) // 실패
                 .isInstanceOf(BusinessException.class);
 
         // 정적 원본(100)이 아니라 직전 성공값(200)으로 돌아가야 함
@@ -136,8 +143,10 @@ class FlowConfigServiceTest {
         when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(brokenNode);
         when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
 
+        Map<String, Object> newConfig = Map.of("threshold", 200);
+
         assertThatThrownBy(() ->
-                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 200)))
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -176,8 +185,10 @@ class FlowConfigServiceTest {
         when(flowManager.getNode(FLOW_ID, NODE_ID)).thenReturn(node);
         when(flowManager.getNodeConfig(FLOW_ID, NODE_ID)).thenReturn(Map.of("threshold", 100));
 
+        Map<String, Object> newConfig = Map.of("threshold", -1);
+
         assertThatThrownBy(() ->
-                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", -1)))
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig))
                 .isInstanceOf(BusinessException.class);
 
         verify(peerFlowSyncPort, never()).syncReconfigure(any(), any(), any());
@@ -188,8 +199,10 @@ class FlowConfigServiceTest {
     void reconfigureRejectedWhenNotActive() {
         when(engineActivePort.isSelfActive()).thenReturn(false);
 
+        Map<String, Object> newConfig = Map.of("threshold", 200);
+
         assertThatThrownBy(() ->
-                flowConfigService.reconfigure(FLOW_ID, NODE_ID, Map.of("threshold", 200)))
+                flowConfigService.reconfigure(FLOW_ID, NODE_ID, newConfig))
                 .isInstanceOf(BusinessException.class);
 
         verify(flowManager, never()).getNode(any(), any());

@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 재할당돼서(같은 컨테이너인데도 호스트 포트가 바뀜) node의 automaticReconnect가 죽은 옛 포트로
  * 영원히 재시도하는 문제가 있어, 재시작 전후로 포트가 절대 안 바뀌도록 고정함
  */
+@SuppressWarnings("java:S2925")
 @Testcontainers
 class MqttSubscriberNodeStandbyTest {
 
@@ -281,6 +282,7 @@ class MqttSubscriberNodeStandbyTest {
 
         @Override
         public void close() {
+            // 테스트용 기록 객체는 해제할 외부 자원을 보유하지 않는다.
         }
     }
 }
